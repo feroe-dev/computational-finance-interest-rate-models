@@ -51,7 +51,7 @@ To generate JavaDoc run
 mvn javadoc:javadoc 
 ```
 
-(if successful, the javadoc will then reside in `target/apidocs`). The project is configured to support
+(if successful, the javadoc will then reside in `target/site/apidocs`). The project is configured to support
 LaTeX in JavaDocs (use `\(` and `\)` to open and close a math environment).
 
 Note that JavaDoc is HTML. This implies that an `<` needs to be written as `&lt;` and `>` needs to be written as `>`.
