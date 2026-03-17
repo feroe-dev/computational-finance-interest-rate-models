@@ -3,8 +3,8 @@ package net.finmath.lecture.computationalfinance.project.measure;
 import java.util.Arrays;
 
 import net.finmath.exception.CalculationException;
+import net.finmath.lecture.computationalfinance.project.statespace.StateSpaceTransform;
 import net.finmath.montecarlo.interestrate.LIBORMarketModel;
-import net.finmath.montecarlo.interestrate.models.LIBORMarketModelFromCovarianceModel.StateSpace;
 import net.finmath.montecarlo.process.MonteCarloProcess;
 import net.finmath.stochastic.RandomVariable;
 import net.finmath.stochastic.Scalar;
@@ -86,7 +86,7 @@ public class ForwardMeasure implements Measure {
 			final int timeIndex,
 			final int firstForwardRateIndex,
 			final RandomVariable[] realizationAtTimeIndex,
-			final StateSpace stateSpace,
+			final StateSpaceTransform stateSpaceTransform,
 			final LIBORMarketModel model) {
 
 		final int numberOfComponents = model.getNumberOfComponents();
@@ -114,12 +114,10 @@ public class ForwardMeasure implements Measure {
 			final double         periodLength = model.getLiborPeriodDiscretization().getTimeStep(j);
 			final RandomVariable forwardRate  = realizationAtTimeIndex[j];
 
-			// Negative weight: -δ_j / (1 + δ_j · L_j)
-			RandomVariable oneStepMeasureTransform = Scalar.of(-periodLength).discount(forwardRate, periodLength);
-
-			if(stateSpace == StateSpace.LOGNORMAL) {
-				oneStepMeasureTransform = oneStepMeasureTransform.mult(forwardRate);
-			}
+			// Negative weight: -δ_j * g(L_j) / (1 + δ_j · L_j)
+			// g(L) = 1 for normal, g(L) = L for log-normal — provided by the state-space plug-in.
+			RandomVariable oneStepMeasureTransform = Scalar.of(-periodLength).discount(forwardRate, periodLength)
+					.mult(stateSpaceTransform.getDriftWeightFactor(forwardRate));
 
 			final RandomVariable[] factorLoading = model.getFactorLoading(process, timeIndex, j, realizationAtTimeIndex);
 
@@ -146,12 +144,10 @@ public class ForwardMeasure implements Measure {
 			final double         periodLength = model.getLiborPeriodDiscretization().getTimeStep(j);
 			final RandomVariable forwardRate  = realizationAtTimeIndex[j];
 
-			// Positive weight: +δ_j / (1 + δ_j · L_j)
-			RandomVariable oneStepMeasureTransform = Scalar.of(periodLength).discount(forwardRate, periodLength);
-
-			if(stateSpace == StateSpace.LOGNORMAL) {
-				oneStepMeasureTransform = oneStepMeasureTransform.mult(forwardRate);
-			}
+			// Positive weight: +δ_j * g(L_j) / (1 + δ_j · L_j)
+			// g(L) = 1 for normal, g(L) = L for log-normal — provided by the state-space plug-in.
+			RandomVariable oneStepMeasureTransform = Scalar.of(periodLength).discount(forwardRate, periodLength)
+					.mult(stateSpaceTransform.getDriftWeightFactor(forwardRate));
 
 			final RandomVariable[] factorLoading = model.getFactorLoading(process, timeIndex, j, realizationAtTimeIndex);
 

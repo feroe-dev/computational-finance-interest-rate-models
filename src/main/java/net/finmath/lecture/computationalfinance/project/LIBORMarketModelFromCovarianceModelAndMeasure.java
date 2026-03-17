@@ -9,13 +9,13 @@ import net.finmath.lecture.computationalfinance.project.measure.ForwardMeasure;
 import net.finmath.lecture.computationalfinance.project.measure.Measure;
 import net.finmath.lecture.computationalfinance.project.measure.SpotMeasure;
 import net.finmath.lecture.computationalfinance.project.measure.TerminalMeasure;
+import net.finmath.lecture.computationalfinance.project.statespace.StateSpaceTransform;
 import net.finmath.marketdata.model.AnalyticModel;
 import net.finmath.marketdata.model.curves.DiscountCurve;
 import net.finmath.marketdata.model.curves.ForwardCurve;
 import net.finmath.montecarlo.RandomVariableFactory;
 import net.finmath.montecarlo.interestrate.CalibrationProduct;
 import net.finmath.montecarlo.interestrate.LIBORMarketModel;
-import net.finmath.montecarlo.interestrate.models.LIBORMarketModelFromCovarianceModel.StateSpace;
 import net.finmath.montecarlo.interestrate.models.covariance.LIBORCovarianceModel;
 import net.finmath.montecarlo.interestrate.models.covariance.LIBORCovarianceModelCalibrateable;
 import net.finmath.montecarlo.model.AbstractProcessModel;
@@ -24,8 +24,8 @@ import net.finmath.stochastic.RandomVariable;
 import net.finmath.time.TimeDiscretization;
 
 /**
- * A LIBOR Market Model where the probability measure is injected as a plug-in via the
- * {@link Measure} interface.
+ * A LIBOR Market Model where both the probability measure and the state-space transform
+ * are injected as plug-ins.
  *
  * <p>
  * This class is based on
@@ -35,6 +35,9 @@ import net.finmath.time.TimeDiscretization;
  *   <li>The hardcoded {@code Measure} enum (SPOT / TERMINAL) is replaced by the
  *       {@link Measure} plug-in interface, allowing arbitrary measures to be injected
  *       at construction time.</li>
+ *   <li>The hardcoded {@code StateSpace} enum (LOGNORMAL / NORMAL) is replaced by the
+ *       {@link StateSpaceTransform} plug-in interface, allowing arbitrary state-space
+ *       transforms to be injected at construction time.</li>
  *   <li>The {@code InterpolationMethod} enum is removed. This model always uses
  *       <b>linear interpolation</b> for fractional tenor periods.</li>
  *   <li>All log-linear interpolation code and its drift adjustment caches are removed.</li>
@@ -46,6 +49,7 @@ import net.finmath.time.TimeDiscretization;
  *
  * @author Felipe, GM-1, GM-2
  * @see Measure
+ * @see StateSpaceTransform
  * @see SpotMeasure
  * @see TerminalMeasure
  * @see ForwardMeasure
@@ -65,8 +69,8 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 	/** The plug-in measure — determines drift and numeraire. */
 	private final Measure            measure;
 
-	/** Whether the model simulates log(L) (LOGNORMAL) or L directly (NORMAL). */
-	private final StateSpace         stateSpace;
+	/** The plug-in state-space transform — determines initial state, transform, and Itô correction. */
+	private final StateSpaceTransform stateSpaceTransform;
 
 	private final double             liborCap;
 
@@ -81,8 +85,8 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 	private transient ConcurrentHashMap<Double, RandomVariable>  numeraireDiscountFactors            = new ConcurrentHashMap<>();
 
 	/**
-	 * Creates a LIBOR Market Model with a plug-in measure, optionally calibrating the
-	 * covariance model if calibration products are supplied.
+	 * Creates a LIBOR Market Model with plug-in measure and state-space transform,
+	 * optionally calibrating the covariance model if calibration products are supplied.
 	 *
 	 * @param liborPeriodDiscretization Tenor structure \( T_0 &lt; T_1 &lt; \ldots &lt; T_n \).
 	 * @param analyticModel             Analytic model for curves (may be {@code null}).
@@ -91,20 +95,23 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 	 * @param randomVariableFactory     Factory for creating {@link RandomVariable} instances.
 	 * @param covarianceModel           Covariance model providing factor loadings.
 	 * @param measure                   The plug-in measure (e.g. {@code new SpotMeasure()}).
+	 * @param stateSpaceTransform       The plug-in state-space transform
+	 *                                  (e.g. {@code new NormalStateSpaceTransform()}).
 	 * @param calibrationProducts       Calibration instruments (may be empty or {@code null}).
-	 * @param properties                Optional map; supports key {@code "stateSpace"} and {@code "liborCap"}.
+	 * @param properties                Optional map; supports key {@code "liborCap"}.
 	 * @throws CalculationException If calibration fails.
 	 */
 	public LIBORMarketModelFromCovarianceModelAndMeasure(
-			final TimeDiscretization    liborPeriodDiscretization,
-			final AnalyticModel         analyticModel,
-			final ForwardCurve          forwardRateCurve,
-			final DiscountCurve         discountCurve,
-			final RandomVariableFactory randomVariableFactory,
-			final LIBORCovarianceModel  covarianceModel,
-			final Measure               measure,
-			final CalibrationProduct[]  calibrationProducts,
-			final Map<String, ?>        properties
+			final TimeDiscretization      liborPeriodDiscretization,
+			final AnalyticModel           analyticModel,
+			final ForwardCurve            forwardRateCurve,
+			final DiscountCurve           discountCurve,
+			final RandomVariableFactory   randomVariableFactory,
+			final LIBORCovarianceModel    covarianceModel,
+			final Measure                 measure,
+			final StateSpaceTransform     stateSpaceTransform,
+			final CalibrationProduct[]    calibrationProducts,
+			final Map<String, ?>          properties
 	) throws CalculationException {
 
 		this.liborPeriodDiscretization = liborPeriodDiscretization;
@@ -113,20 +120,14 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 		this.discountCurve             = discountCurve;
 		this.randomVariableFactory     = randomVariableFactory;
 		this.measure                   = measure;
+		this.stateSpaceTransform       = stateSpaceTransform;
 
 		// Read optional properties
-		StateSpace stateSpaceProperty = StateSpace.LOGNORMAL;
 		double liborCapProperty = 1E5;
-		if(properties != null) {
-			if(properties.containsKey("stateSpace")) {
-				stateSpaceProperty = StateSpace.valueOf(((String) properties.get("stateSpace")).toUpperCase());
-			}
-			if(properties.containsKey("liborCap")) {
-				liborCapProperty = (Double) properties.get("liborCap");
-			}
+		if(properties != null && properties.containsKey("liborCap")) {
+			liborCapProperty = (Double) properties.get("liborCap");
 		}
-		this.stateSpace = stateSpaceProperty;
-		this.liborCap   = liborCapProperty;
+		this.liborCap = liborCapProperty;
 
 		// Calibrate covariance model if products are given
 		if(calibrationProducts != null && calibrationProducts.length > 0) {
@@ -151,7 +152,7 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 		final double[] liborInitialStates = new double[liborPeriodDiscretization.getNumberOfTimeSteps()];
 		for(int i = 0; i < liborPeriodDiscretization.getNumberOfTimeSteps(); i++) {
 			final double rate = forwardRateCurve.getForward(curveModel, liborPeriodDiscretization.getTime(i), liborPeriodDiscretization.getTimeStep(i));
-			liborInitialStates[i] = (stateSpace == StateSpace.LOGNORMAL) ? Math.log(Math.max(rate, 0)) : rate;
+			liborInitialStates[i] = stateSpaceTransform.getInitialState(rate);
 		}
 		final RandomVariable[] initialState = new RandomVariable[getNumberOfComponents()];
 		for(int i = 0; i < getNumberOfComponents(); i++) {
@@ -162,10 +163,7 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 
 	@Override
 	public RandomVariable applyStateSpaceTransform(final MonteCarloProcess process, final int timeIndex, final int componentIndex, final RandomVariable randomVariable) {
-		RandomVariable value = randomVariable;
-		if(stateSpace == StateSpace.LOGNORMAL) {
-			value = value.exp();
-		}
+		RandomVariable value = stateSpaceTransform.applyTransform(randomVariable);
 		if(!Double.isInfinite(liborCap)) {
 			value = value.cap(liborCap);
 		}
@@ -174,11 +172,7 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 
 	@Override
 	public RandomVariable applyStateSpaceTransformInverse(final MonteCarloProcess process, final int timeIndex, final int componentIndex, final RandomVariable randomVariable) {
-		RandomVariable value = randomVariable;
-		if(stateSpace == StateSpace.LOGNORMAL) {
-			value = value.log();
-		}
-		return value;
+		return stateSpaceTransform.applyInverseTransform(randomVariable);
 	}
 
 	@Override
@@ -195,7 +189,8 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 	 *
 	 * <p>
 	 * After the measure computes the measure-specific part, the Itô correction
-	 * \( -\tfrac{1}{2}\sigma_j^2 \) is added for log-normal state space.
+	 * is added via the injected {@link StateSpaceTransform}:
+	 * \( -\tfrac{1}{2}\sigma_j^2 \) for log-normal, zero for normal.
 	 */
 	@Override
 	public RandomVariable[] getDrift(
@@ -210,15 +205,13 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 			firstForwardRateIndex = -firstForwardRateIndex - 1 + 1;
 		}
 
-		// Delegate measure-specific drift to the plug-in
-		final RandomVariable[] drift = measure.getDrift(process, timeIndex, firstForwardRateIndex, realizationAtTimeIndex, stateSpace, this);
+		// Delegate measure-specific drift to the measure plug-in
+		final RandomVariable[] drift = measure.getDrift(process, timeIndex, firstForwardRateIndex, realizationAtTimeIndex, stateSpaceTransform, this);
 
-		// Ito correction: -0.5 * sigma_j^2  (only for log-normal state space)
-		if(stateSpace == StateSpace.LOGNORMAL) {
-			for(int j = firstForwardRateIndex; j < getNumberOfComponents(); j++) {
-				final RandomVariable variance = covarianceModel.getCovariance(time, j, j, realizationAtTimeIndex);
-				drift[j] = drift[j].addProduct(variance, -0.5);
-			}
+		// Itô correction — delegated to the state-space transform plug-in
+		for(int j = firstForwardRateIndex; j < getNumberOfComponents(); j++) {
+			final RandomVariable variance = covarianceModel.getCovariance(time, j, j, realizationAtTimeIndex);
+			drift[j] = drift[j].add(stateSpaceTransform.getItoCorrection(variance));
 		}
 
 		return drift;
@@ -491,6 +484,15 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 		return measure;
 	}
 
+	/**
+	 * Returns the injected {@link StateSpaceTransform} plug-in.
+	 *
+	 * @return The state-space transform used for initial state, transform and Itô correction.
+	 */
+	public StateSpaceTransform getStateSpaceTransform() {
+		return stateSpaceTransform;
+	}
+
 	// -------------------------------------------------------------------------
 	// Integrated covariance (unchanged from finmath-lib)
 	// -------------------------------------------------------------------------
@@ -545,14 +547,9 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 	@Override
 	public LIBORMarketModelFromCovarianceModelAndMeasure getCloneWithModifiedCovarianceModel(final LIBORCovarianceModel newCovarianceModel) {
 		try {
-			final Map<String, Object> properties = new HashMap<>();
-			properties.put("stateSpace", stateSpace.name());
-			properties.put("liborCap", liborCap);
-			final LIBORMarketModelFromCovarianceModelAndMeasure clone =
-					new LIBORMarketModelFromCovarianceModelAndMeasure(
-							liborPeriodDiscretization, curveModel, forwardRateCurve, discountCurve,
-							randomVariableFactory, newCovarianceModel, measure, null, properties);
-			return clone;
+			return new LIBORMarketModelFromCovarianceModelAndMeasure(
+					liborPeriodDiscretization, curveModel, forwardRateCurve, discountCurve,
+					randomVariableFactory, newCovarianceModel, measure, stateSpaceTransform, null, null);
 		} catch(final CalculationException e) {
 			return null;
 		}
@@ -560,11 +557,11 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 
 	@Override
 	public LIBORMarketModelFromCovarianceModelAndMeasure getCloneWithModifiedData(final Map<String, Object> dataModified) throws CalculationException {
-		TimeDiscretization  liborPeriodDiscretization = this.liborPeriodDiscretization;
-		AnalyticModel       analyticModel             = this.curveModel;
-		ForwardCurve        forwardRateCurve          = this.forwardRateCurve;
-		DiscountCurve       discountCurve             = this.discountCurve;
-		LIBORCovarianceModel covarianceModel          = this.covarianceModel;
+		TimeDiscretization   liborPeriodDiscretization = this.liborPeriodDiscretization;
+		AnalyticModel        analyticModel             = this.curveModel;
+		ForwardCurve         forwardRateCurve          = this.forwardRateCurve;
+		DiscountCurve        discountCurve             = this.discountCurve;
+		LIBORCovarianceModel covarianceModel           = this.covarianceModel;
 
 		if(dataModified != null) {
 			liborPeriodDiscretization = (TimeDiscretization)  dataModified.getOrDefault("liborPeriodDiscretization", liborPeriodDiscretization);
@@ -575,19 +572,18 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 		}
 
 		final Map<String, Object> properties = new HashMap<>();
-		properties.put("stateSpace", stateSpace.name());
 		properties.put("liborCap", liborCap);
 
 		return new LIBORMarketModelFromCovarianceModelAndMeasure(
 				liborPeriodDiscretization, analyticModel, forwardRateCurve, discountCurve,
-				randomVariableFactory, covarianceModel, measure, null, properties);
+				randomVariableFactory, covarianceModel, measure, stateSpaceTransform, null, properties);
 	}
 
 	@Override
 	public String toString() {
 		return "LIBORMarketModelFromCovarianceModelAndMeasure"
 				+ " [measure=" + measure.getClass().getSimpleName()
-				+ ", stateSpace=" + stateSpace
+				+ ", stateSpaceTransform=" + stateSpaceTransform.getClass().getSimpleName()
 				+ ", liborPeriodDiscretization=" + liborPeriodDiscretization + "]";
 	}
 }

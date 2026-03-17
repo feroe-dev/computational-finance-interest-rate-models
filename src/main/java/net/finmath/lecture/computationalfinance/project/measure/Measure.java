@@ -2,9 +2,9 @@ package net.finmath.lecture.computationalfinance.project.measure;
 
 import net.finmath.exception.CalculationException;
 import net.finmath.montecarlo.interestrate.LIBORMarketModel;
-import net.finmath.montecarlo.interestrate.models.LIBORMarketModelFromCovarianceModel.StateSpace;
 import net.finmath.montecarlo.process.MonteCarloProcess;
 import net.finmath.stochastic.RandomVariable;
+import net.finmath.lecture.computationalfinance.project.statespace.StateSpaceTransform;
 
 /**
  * Plug-in interface for the probability measure used in a LIBOR Market Model simulation.
@@ -55,7 +55,7 @@ public interface Measure {
 	 * @param timeIndex              The current simulation time index \( i \).
 	 * @param firstForwardRateIndex  Index of the first forward rate that has not yet fixed.
 	 * @param realizationAtTimeIndex Current forward rate vector \( L(t_i) \).
-	 * @param stateSpace             Whether the model uses a log-normal or normal state space.
+	 * @param stateSpaceTransform    The state-space transform plug-in (provides drift weight factor).
 	 * @param model                  The LIBOR market model (provides period lengths and factor loadings).
 	 * @return Drift vector \( \mu(t_i) \) — array of length {@code model.getNumberOfComponents()},
 	 *         with {@code null} entries for already-fixed components.
@@ -65,7 +65,7 @@ public interface Measure {
 			int timeIndex,
 			int firstForwardRateIndex,
 			RandomVariable[] realizationAtTimeIndex,
-			StateSpace stateSpace,
+			StateSpaceTransform stateSpaceTransform,
 			LIBORMarketModel model);
 
 	/**

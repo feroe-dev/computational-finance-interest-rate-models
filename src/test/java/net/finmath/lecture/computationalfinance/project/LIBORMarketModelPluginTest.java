@@ -1,4 +1,4 @@
-package net.finmath.lecture.computationalfinance.project.measure;
+package net.finmath.lecture.computationalfinance.project;
 
 import java.util.Map;
 
@@ -7,7 +7,13 @@ import org.junit.jupiter.api.Test;
 
 import net.finmath.exception.CalculationException;
 import net.finmath.functions.AnalyticFormulas;
-import net.finmath.lecture.computationalfinance.project.LIBORMarketModelFromCovarianceModelAndMeasure;
+import net.finmath.lecture.computationalfinance.project.measure.ForwardMeasure;
+import net.finmath.lecture.computationalfinance.project.measure.Measure;
+import net.finmath.lecture.computationalfinance.project.measure.SpotMeasure;
+import net.finmath.lecture.computationalfinance.project.measure.TerminalMeasure;
+import net.finmath.lecture.computationalfinance.project.statespace.LogNormalStateSpaceTransform;
+import net.finmath.lecture.computationalfinance.project.statespace.NormalStateSpaceTransform;
+import net.finmath.lecture.computationalfinance.project.statespace.StateSpaceTransform;
 import net.finmath.marketdata.model.curves.ForwardCurveInterpolation;
 import net.finmath.montecarlo.BrownianMotionFromMersenneRandomNumbers;
 import net.finmath.montecarlo.RandomVariableFromArrayFactory;
@@ -22,7 +28,8 @@ import net.finmath.stochastic.RandomVariable;
 import net.finmath.time.TimeDiscretizationFromArray;
 
 /**
- * Tests for {@link LIBORMarketModelFromCovarianceModelAndMeasure}.
+ * Integration tests for the measure and state-space transform plug-ins
+ * of {@link LIBORMarketModelFromCovarianceModelAndMeasure}.
  *
  * <p>
  * One test per product. Each test checks three things in sequence:
@@ -37,7 +44,7 @@ import net.finmath.time.TimeDiscretizationFromArray;
  *
  * @author Felipe, GM-1, GM-2
  */
-public class MeasureComparisonTest {
+public class LIBORMarketModelPluginTest {
 
 	// -------------------------------------------------------------------------
 	// Shared model parameters
@@ -150,6 +157,7 @@ public class MeasureComparisonTest {
 				? 100.0 * Math.abs(pluginTerminal - originalTerminal) / Math.abs(originalTerminal) : 0.0;
 
 		System.out.println("=".repeat(80));
+		System.out.println("  EXERCISE 2 — Measure Plug-in");
 		System.out.println("  FORWARD RATE AGREEMENT  |  Fixing = 3.5 yr, Payment = 4.0 yr");
 		System.out.println("=".repeat(80));
 		System.out.println("");
@@ -225,6 +233,88 @@ public class MeasureComparisonTest {
 	}
 
 	// =========================================================================
+	// Test 3 — State-Space Transform
+	// =========================================================================
+
+	/**
+	 * Verifies that the state-space plug-in reproduces the original model bit-for-bit,
+	 * and shows how the Caplet price differs between Normal and Log-Normal state spaces.
+	 *
+	 * <p>Sections:
+	 * <ol>
+	 *   <li><b>Consistency (Normal)</b>: {@link NormalStateSpaceTransform} must reproduce
+	 *       the original model with {@code StateSpace.NORMAL} bit-for-bit (same seed).</li>
+	 *   <li><b>Consistency (Log-Normal)</b>: {@link LogNormalStateSpaceTransform} must reproduce
+	 *       the original model with {@code StateSpace.LOGNORMAL} bit-for-bit (same seed).</li>
+	 *   <li><b>State-space comparison</b>: Caplet and FRA prices under Normal vs Log-Normal
+	 *       are shown at multiple strikes. They should differ because the distributional
+	 *       assumptions are different (Bachelier vs Black dynamics).</li>
+	 * </ol>
+	 */
+	@Test
+	public void testStateSpaceTransform() throws CalculationException {
+		final double fixingTime  = 3.5;
+		final double paymentTime = 4.0;
+
+		// ----- Section 1: Consistency (Normal) -------------------------------
+		final TermStructureMonteCarloSimulationModel simOldNormal  =
+				buildOldSimulation("SPOT", "NORMAL", SEED_SPOT);
+		final TermStructureMonteCarloSimulationModel simPluginNormal =
+				buildNewSimulation(new SpotMeasure(), new NormalStateSpaceTransform(), SEED_SPOT);
+
+		final double oldCapletNormal    = capletValue(simOldNormal,    fixingTime, paymentTime, FLAT_FORWARD_RATE);
+		final double pluginCapletNormal = capletValue(simPluginNormal, fixingTime, paymentTime, FLAT_FORWARD_RATE);
+
+		// ----- Section 2: Consistency (Log-Normal) ---------------------------
+		final TermStructureMonteCarloSimulationModel simOldLogNormal  =
+				buildOldSimulation("SPOT", "LOGNORMAL", SEED_SPOT);
+		final TermStructureMonteCarloSimulationModel simPluginLogNormal =
+				buildNewSimulation(new SpotMeasure(), new LogNormalStateSpaceTransform(), SEED_SPOT);
+
+		final double oldCapletLogNormal    = capletValue(simOldLogNormal,    fixingTime, paymentTime, FLAT_FORWARD_RATE);
+		final double pluginCapletLogNormal = capletValue(simPluginLogNormal, fixingTime, paymentTime, FLAT_FORWARD_RATE);
+
+		System.out.println("=".repeat(80));
+		System.out.println("  EXERCISE 6 — State-Space Transform Plug-in");
+		System.out.println("  STATE-SPACE TRANSFORM  |  Spot measure, Fixing = 3.5 yr, Payment = 4.0 yr");
+		System.out.println("=".repeat(80));
+		System.out.println("");
+		System.out.println("  --- CONSISTENCY: plug-in model vs original StateSpace enum (same seed → bit-for-bit)");
+		System.out.println("  The absolute error is exactly 0 because both models execute identical floating-point");
+		System.out.println("  operations in the same order on the same Brownian paths (deterministic reproduction).");
+		System.out.println("  " + "-".repeat(74));
+		System.out.printf("  %-22s  %12s  %12s  %12s%n", "State Space", "Original", "Plug-in", "Abs. Error");
+		System.out.println("  " + "-".repeat(74));
+		System.out.printf("  %-22s  %+12.6f  %+12.6f  %+12.2e%n",
+				"Normal (Bachelier)",    oldCapletNormal,    pluginCapletNormal,    Math.abs(pluginCapletNormal    - oldCapletNormal));
+		System.out.printf("  %-22s  %+12.6f  %+12.6f  %+12.2e%n",
+				"Log-Normal (Black)",   oldCapletLogNormal, pluginCapletLogNormal, Math.abs(pluginCapletLogNormal - oldCapletLogNormal));
+		System.out.println("  " + "-".repeat(74));
+		System.out.println("");
+
+		Assertions.assertEquals(oldCapletNormal,    pluginCapletNormal,    TOLERANCE_EXACT, "State-space consistency: NormalStateSpaceTransform vs StateSpace.NORMAL");
+		Assertions.assertEquals(oldCapletLogNormal, pluginCapletLogNormal, TOLERANCE_EXACT, "State-space consistency: LogNormalStateSpaceTransform vs StateSpace.LOGNORMAL");
+
+		// ----- Section 3: State-space comparison -----------------------------
+		System.out.println("  --- STATE-SPACE COMPARISON: Caplet price — Normal vs Log-Normal (Spot measure)");
+		System.out.println("  Note: prices differ because Normal and Log-Normal impose different dynamics.");
+		System.out.println("  " + "-".repeat(70));
+		System.out.printf("  %-10s  %14s  %14s  %14s%n", "Strike", "Normal", "Log-Normal", "Difference");
+		System.out.println("  " + "-".repeat(70));
+
+		for(final double strike : TEST_STRIKES) {
+			final double capletNormal    = capletValue(simPluginNormal,    fixingTime, paymentTime, strike);
+			final double capletLogNormal = capletValue(simPluginLogNormal, fixingTime, paymentTime, strike);
+			System.out.printf("  %8.2f %%  %+14.6f  %+14.6f  %+14.6f%n",
+					strike * 100.0, capletNormal, capletLogNormal, capletLogNormal - capletNormal);
+		}
+		System.out.println("  " + "-".repeat(70));
+		System.out.println("");
+		System.out.println("=".repeat(80));
+		System.out.println();
+	}
+
+	// =========================================================================
 	// Test 2 — Caplet
 	// =========================================================================
 
@@ -256,6 +346,7 @@ public class MeasureComparisonTest {
 		final double pluginTerminal   = capletValue(simulationPluginTerminal,   fixingTime, paymentTime, FLAT_FORWARD_RATE);
 
 		System.out.println("=".repeat(80));
+		System.out.println("  EXERCISE 2 — Measure Plug-in");
 		System.out.println("  CAPLET  |  Fixing = 3.5 yr, Payment = 4.0 yr, Strike = forward rate (3 %)");
 		System.out.println("=".repeat(80));
 		System.out.println("  --- CONSISTENCY: does our new plug-in reproduce the original finmath-lib?");
@@ -412,13 +503,15 @@ public class MeasureComparisonTest {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Builds a simulation using the original {@link LIBORMarketModelFromCovarianceModel}.
+	 * Builds a simulation using the original {@link LIBORMarketModelFromCovarianceModel}
+	 * with an explicit state space.
 	 *
-	 * @param measureName {@code "SPOT"} or {@code "TERMINAL"}.
-	 * @param seed        Random seed for the Brownian motion.
+	 * @param measureName    {@code "SPOT"} or {@code "TERMINAL"}.
+	 * @param stateSpaceName {@code "NORMAL"} or {@code "LOGNORMAL"}.
+	 * @param seed           Random seed for the Brownian motion.
 	 */
 	private TermStructureMonteCarloSimulationModel buildOldSimulation(
-			final String measureName, final int seed) throws CalculationException {
+			final String measureName, final String stateSpaceName, final int seed) throws CalculationException {
 
 		final var timeDiscretization  = new TimeDiscretizationFromArray(0.0, (int)(TIME_HORIZON / PERIOD_LENGTH), PERIOD_LENGTH);
 		final var tenorDiscretization = new TimeDiscretizationFromArray(0.0, (int)(TIME_HORIZON / PERIOD_LENGTH), PERIOD_LENGTH);
@@ -440,7 +533,7 @@ public class MeasureComparisonTest {
 
 		final var properties = Map.of(
 				"measure",    measureName,
-				"stateSpace", LIBORMarketModelFromCovarianceModel.StateSpace.NORMAL.name());
+				"stateSpace", stateSpaceName);
 
 		final var model = new LIBORMarketModelFromCovarianceModel(
 				tenorDiscretization, null, forwardCurve, null,
@@ -454,13 +547,38 @@ public class MeasureComparisonTest {
 	}
 
 	/**
+	 * Builds a simulation using the original {@link LIBORMarketModelFromCovarianceModel}
+	 * with {@code StateSpace.NORMAL} (default).
+	 *
+	 * @param measureName {@code "SPOT"} or {@code "TERMINAL"}.
+	 * @param seed        Random seed for the Brownian motion.
+	 */
+	private TermStructureMonteCarloSimulationModel buildOldSimulation(
+			final String measureName, final int seed) throws CalculationException {
+		return buildOldSimulation(measureName, LIBORMarketModelFromCovarianceModel.StateSpace.NORMAL.name(), seed);
+	}
+
+	/**
 	 * Builds a simulation using our new {@link LIBORMarketModelFromCovarianceModelAndMeasure}.
 	 *
-	 * @param measure The plug-in measure to inject.
-	 * @param seed    Random seed for the Brownian motion.
+	 * @param measure             The plug-in measure to inject.
+	 * @param seed                Random seed for the Brownian motion.
 	 */
 	private TermStructureMonteCarloSimulationModel buildNewSimulation(
 			final Measure measure, final int seed) throws CalculationException {
+		return buildNewSimulation(measure, new NormalStateSpaceTransform(), seed);
+	}
+
+	/**
+	 * Builds a simulation using our new {@link LIBORMarketModelFromCovarianceModelAndMeasure}
+	 * with an explicit state-space transform.
+	 *
+	 * @param measure             The plug-in measure to inject.
+	 * @param stateSpaceTransform The plug-in state-space transform to inject.
+	 * @param seed                Random seed for the Brownian motion.
+	 */
+	private TermStructureMonteCarloSimulationModel buildNewSimulation(
+			final Measure measure, final StateSpaceTransform stateSpaceTransform, final int seed) throws CalculationException {
 
 		final var timeDiscretization  = new TimeDiscretizationFromArray(0.0, (int)(TIME_HORIZON / PERIOD_LENGTH), PERIOD_LENGTH);
 		final var tenorDiscretization = new TimeDiscretizationFromArray(0.0, (int)(TIME_HORIZON / PERIOD_LENGTH), PERIOD_LENGTH);
@@ -480,12 +598,9 @@ public class MeasureComparisonTest {
 		final var covarianceModel  = new LIBORCovarianceModelFromVolatilityAndCorrelation(
 				timeDiscretization, tenorDiscretization, volatilityModel, correlationModel);
 
-		final var properties = Map.of(
-				"stateSpace", LIBORMarketModelFromCovarianceModel.StateSpace.NORMAL.name());
-
 		final var model = new LIBORMarketModelFromCovarianceModelAndMeasure(
 				tenorDiscretization, null, forwardCurve, null,
-				new RandomVariableFromArrayFactory(), covarianceModel, measure, null, properties);
+				new RandomVariableFromArrayFactory(), covarianceModel, measure, stateSpaceTransform, null, null);
 
 		final var brownianMotion = new BrownianMotionFromMersenneRandomNumbers(
 				timeDiscretization, NUMBER_OF_FACTORS, NUMBER_OF_PATHS, seed);
