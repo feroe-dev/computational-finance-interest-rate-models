@@ -200,7 +200,7 @@ public class ForwardMeasure implements Measure {
 		        }
 		        RandomVariable forwardRate = model.getLIBOR(process, simulationTimeIndex, l-1);
 		        double periodLength = model.getLiborPeriodDiscretization().getTimeStep(liborTimeIndex - 1);
-		        numeraire = numéraire.accrue(forwardRate, periodLength);
+		        numeraire = numeraire.accrue(forwardRate, periodLength);
 		    } 
 		}        
          
