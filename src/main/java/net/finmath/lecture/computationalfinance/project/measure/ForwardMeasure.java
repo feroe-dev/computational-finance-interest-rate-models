@@ -135,6 +135,8 @@ public class ForwardMeasure implements Measure {
 		// -------------------------------------------------------------------------
 		// Part 2 — Spot-like upward loop for j >= k
 		// drift[j] = +Σ_{l=k}^{j} δ_l/(1+δ_l L_l) · (λ_j · λ_l)
+		// resp.
+		// drift[j] = +Σ_{l=m(t)+1}^{j} δ_l/(1+δ_l L_l) · (λ_j · λ_l)
 		// -------------------------------------------------------------------------
 		Arrays.fill(factorLoadingsSums, zero);   // reset — spot part starts fresh from k
 
