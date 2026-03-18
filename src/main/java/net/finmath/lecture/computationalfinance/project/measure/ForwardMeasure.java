@@ -184,7 +184,7 @@ public class ForwardMeasure implements Measure {
 			final LIBORMarketModel model) throws CalculationException {
 
 		// P(T_k, T_k) = 1  (bond has matured)
-		if(liborTimeIndex = k) {
+		if(liborTimeIndex == k) {
 			return model.getRandomVariableForConstant(1.0);
 		}
 
