@@ -188,6 +188,23 @@ public class ForwardMeasure implements Measure {
 			return model.getRandomVariableForConstant(1.0);
 		}
 
+		if(liborTimeIndex > k) {
+		    numeraire = model.getRandomVariableForConstant(1.0);
+		    for (int l = k+1, l <= liborTimeIndex, l++) {
+		        // Find simulation time index for T_{l-1}.
+		        // getTimeIndex returns a negative value when T_{l-1} falls between grid points;
+		        // in that case use the floor index (-index - 1).
+		        int simulationTimeIndex = process.getTimeIndex(model.getLiborPeriod(l - 1));
+		        if(simulationTimeIndex < 0) {
+			        simulationTimeIndex = -simulationTimeIndex - 1;
+		        }
+		        RandomVariable forwardRate = model.getLIBOR(process, simulationTimeIndex, l-1);
+		        double periodLength = model.getLiborPeriodDiscretization().getTimeStep(liborTimeIndex - 1);
+		        numeraire = numéraire.accrue(forwardRate, periodLength)
+		    } 
+		}        
+         
+         // Case liborTimeIndex < k
 		// Find simulation time index for T_j; use floor if T_j falls between grid points.
 		int timeIndex = process.getTimeIndex(model.getLiborPeriod(liborTimeIndex));
 		if(timeIndex < 0) {
