@@ -74,7 +74,7 @@ public class ForwardMeasure implements Measure {
 	 *       same structure as {@link TerminalMeasure} but the sum stops at \( k{-}1 \) instead of \( n{-}1 \).
 	 *       Drift is computed <em>before</em> updating the sums, so \( j \) is excluded from its own sum.
 	 *   </li>
-	 *   <li><b>Spot part</b> (upward loop, \( j = k \) up to \( n{-}1 \)):
+	 *   <li><b>Spot part</b> (upward loop, \( j = k \) resp. \( j = m(t) +1 \)up to \( n{-}1 \)):
 	 *       same structure as {@link SpotMeasure} but the sum starts fresh from \( k \).
 	 *       Sums are updated <em>before</em> computing drift, so \( j \) is included in its own sum.
 	 *   </li>
