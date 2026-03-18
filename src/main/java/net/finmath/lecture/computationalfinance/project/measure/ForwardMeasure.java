@@ -33,7 +33,13 @@ import net.finmath.stochastic.Scalar;
  *         \mu_j(t) = +\sum_{l=k}^{j}
  *                    \frac{\delta_l}{1+\delta_l L_l(t)}\,(\lambda_j \cdot \lambda_l)
  *       \]
- *   </li>
+ *    if \( t \leq T_k \) and
+ *    \[
+ *       \mu_j(t) =   +\sum_{l=m(t)+1}^{j}
+ *                           frac{\delta_l}{1+\delta_l L_l(t)}\,(\lambda_j \cdot \lambda_l)
+ *    \]
+ *    if \( t > T_k \)
+ *  </li>
  * </ul>
  *
  * <p>
