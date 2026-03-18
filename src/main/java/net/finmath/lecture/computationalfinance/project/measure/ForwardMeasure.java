@@ -190,7 +190,7 @@ public class ForwardMeasure implements Measure {
 
 		if(liborTimeIndex > k) {
 		    RandomVariable numeraire = model.getRandomVariableForConstant(1.0);
-		    for (int l = k+1, l <= liborTimeIndex, l++) {
+		    for (int l = k+1; l <= liborTimeIndex; l++) {
 		        // Find simulation time index for T_{l-1}.
 		        // getTimeIndex returns a negative value when T_{l-1} falls between grid points;
 		        // in that case use the floor index (-index - 1).
