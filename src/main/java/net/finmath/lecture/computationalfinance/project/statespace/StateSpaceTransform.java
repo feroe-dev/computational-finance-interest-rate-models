@@ -22,7 +22,7 @@ import net.finmath.stochastic.RandomVariable;
  *
  * <p>
  * Implementations of this interface allow the model
- * {@code LIBORMarketModelFromCovarianceModelAndMeasure} to support arbitrary state-space
+ * {@code AugmentedLIBORMarketModel} to support arbitrary state-space
  * transforms without any modification to the model class itself (open/closed principle).
  *
  * @author Felipe, GM-1, GM-2

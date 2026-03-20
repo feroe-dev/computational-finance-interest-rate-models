@@ -200,7 +200,7 @@ public class ForwardMeasure implements Measure {
 		    } 
 		}        
          
-         // Case liborTimeIndex < k
+        // Case liborTimeIndex < k
 		// Find simulation time index for T_j; use floor if T_j falls between grid points.
 		int timeIndex = process.getTimeIndex(model.getLiborPeriod(liborTimeIndex));
 		if(timeIndex < 0) {

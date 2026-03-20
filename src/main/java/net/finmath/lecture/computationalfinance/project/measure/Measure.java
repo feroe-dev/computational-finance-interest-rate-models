@@ -1,10 +1,10 @@
 package net.finmath.lecture.computationalfinance.project.measure;
 
 import net.finmath.exception.CalculationException;
+import net.finmath.lecture.computationalfinance.project.statespace.StateSpaceTransform;
 import net.finmath.montecarlo.interestrate.LIBORMarketModel;
 import net.finmath.montecarlo.process.MonteCarloProcess;
 import net.finmath.stochastic.RandomVariable;
-import net.finmath.lecture.computationalfinance.project.statespace.StateSpaceTransform;
 
 /**
  * Plug-in interface for the probability measure used in a LIBOR Market Model simulation.
@@ -31,7 +31,7 @@ import net.finmath.lecture.computationalfinance.project.statespace.StateSpaceTra
  *
  * <p>
  * Implementations of this interface allow the model
- * {@code LIBORMarketModelFromCovarianceModelAndMeasure} to support arbitrary measures
+ * {@code AugmentedLIBORMarketModel} to support arbitrary measures
  * without any modification to the model class itself (open/closed principle).
  *
  * @author Felipe, GM-1, GM-2

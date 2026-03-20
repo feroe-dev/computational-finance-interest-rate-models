@@ -29,7 +29,7 @@ import net.finmath.time.TimeDiscretizationFromArray;
 
 /**
  * Integration tests for the measure and state-space transform plug-ins
- * of {@link LIBORMarketModelFromCovarianceModelAndMeasure}.
+ * of {@link AugmentedLIBORMarketModel}.
  *
  * <p>
  * One test per product. Each test checks three things in sequence:
@@ -559,7 +559,7 @@ public class LIBORMarketModelPluginTest {
 	}
 
 	/**
-	 * Builds a simulation using our new {@link LIBORMarketModelFromCovarianceModelAndMeasure}.
+	 * Builds a simulation using our new {@link AugmentedLIBORMarketModel}.
 	 *
 	 * @param measure             The plug-in measure to inject.
 	 * @param seed                Random seed for the Brownian motion.
@@ -570,7 +570,7 @@ public class LIBORMarketModelPluginTest {
 	}
 
 	/**
-	 * Builds a simulation using our new {@link LIBORMarketModelFromCovarianceModelAndMeasure}
+	 * Builds a simulation using our new {@link AugmentedLIBORMarketModel}
 	 * with an explicit state-space transform.
 	 *
 	 * @param measure             The plug-in measure to inject.
@@ -598,7 +598,7 @@ public class LIBORMarketModelPluginTest {
 		final var covarianceModel  = new LIBORCovarianceModelFromVolatilityAndCorrelation(
 				timeDiscretization, tenorDiscretization, volatilityModel, correlationModel);
 
-		final var model = new LIBORMarketModelFromCovarianceModelAndMeasure(
+		final var model = new AugmentedLIBORMarketModel(
 				tenorDiscretization, null, forwardCurve, null,
 				new RandomVariableFromArrayFactory(), covarianceModel, measure, stateSpaceTransform, null, null);
 

@@ -54,7 +54,7 @@ import net.finmath.time.TimeDiscretization;
  * @see TerminalMeasure
  * @see ForwardMeasure
  */
-public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProcessModel implements LIBORMarketModel {
+public class AugmentedLIBORMarketModel extends AbstractProcessModel implements LIBORMarketModel {
 
 	/** Tenor discretization T_0 &lt; T_1 &lt; ... &lt; T_n. */
 	private final TimeDiscretization liborPeriodDiscretization;
@@ -101,7 +101,7 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 	 * @param properties                Optional map; supports key {@code "liborCap"}.
 	 * @throws CalculationException If calibration fails.
 	 */
-	public LIBORMarketModelFromCovarianceModelAndMeasure(
+	public AugmentedLIBORMarketModel(
 			final TimeDiscretization      liborPeriodDiscretization,
 			final AnalyticModel           analyticModel,
 			final ForwardCurve            forwardRateCurve,
@@ -545,9 +545,9 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 	// -------------------------------------------------------------------------
 
 	@Override
-	public LIBORMarketModelFromCovarianceModelAndMeasure getCloneWithModifiedCovarianceModel(final LIBORCovarianceModel newCovarianceModel) {
+	public AugmentedLIBORMarketModel getCloneWithModifiedCovarianceModel(final LIBORCovarianceModel newCovarianceModel) {
 		try {
-			return new LIBORMarketModelFromCovarianceModelAndMeasure(
+			return new AugmentedLIBORMarketModel(
 					liborPeriodDiscretization, curveModel, forwardRateCurve, discountCurve,
 					randomVariableFactory, newCovarianceModel, measure, stateSpaceTransform, null, null);
 		} catch(final CalculationException e) {
@@ -556,7 +556,7 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 	}
 
 	@Override
-	public LIBORMarketModelFromCovarianceModelAndMeasure getCloneWithModifiedData(final Map<String, Object> dataModified) throws CalculationException {
+	public AugmentedLIBORMarketModel getCloneWithModifiedData(final Map<String, Object> dataModified) throws CalculationException {
 		TimeDiscretization   liborPeriodDiscretization = this.liborPeriodDiscretization;
 		AnalyticModel        analyticModel             = this.curveModel;
 		ForwardCurve         forwardRateCurve          = this.forwardRateCurve;
@@ -574,14 +574,14 @@ public class LIBORMarketModelFromCovarianceModelAndMeasure extends AbstractProce
 		final Map<String, Object> properties = new HashMap<>();
 		properties.put("liborCap", liborCap);
 
-		return new LIBORMarketModelFromCovarianceModelAndMeasure(
+		return new AugmentedLIBORMarketModel(
 				liborPeriodDiscretization, analyticModel, forwardRateCurve, discountCurve,
 				randomVariableFactory, covarianceModel, measure, stateSpaceTransform, null, properties);
 	}
 
 	@Override
 	public String toString() {
-		return "LIBORMarketModelFromCovarianceModelAndMeasure"
+		return "AugmentedLIBORMarketModel"
 				+ " [measure=" + measure.getClass().getSimpleName()
 				+ ", stateSpaceTransform=" + stateSpaceTransform.getClass().getSimpleName()
 				+ ", liborPeriodDiscretization=" + liborPeriodDiscretization + "]";
