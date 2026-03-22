@@ -18,51 +18,35 @@ import net.finmath.marketdata.model.curves.ForwardCurveInterpolation;
 import net.finmath.montecarlo.BrownianMotionFromMersenneRandomNumbers;
 import net.finmath.montecarlo.RandomVariableFromArrayFactory;
 import net.finmath.montecarlo.interestrate.LIBORMonteCarloSimulationFromLIBORModel;
-import net.finmath.montecarlo.interestrate.TermStructureMonteCarloSimulationModel;
 import net.finmath.montecarlo.interestrate.models.LIBORMarketModelFromCovarianceModel;
 import net.finmath.montecarlo.interestrate.models.covariance.LIBORCorrelationModelExponentialDecay;
 import net.finmath.montecarlo.interestrate.models.covariance.LIBORCovarianceModelFromVolatilityAndCorrelation;
 import net.finmath.montecarlo.interestrate.models.covariance.LIBORVolatilityModelFourParameterExponentialForm;
+import net.finmath.montecarlo.interestrate.products.Caplet;
 import net.finmath.montecarlo.process.EulerSchemeFromProcessModel;
-import net.finmath.stochastic.RandomVariable;
 import net.finmath.time.TimeDiscretizationFromArray;
 
-/**
- * Integration tests for the measure and state-space transform plug-ins
- * of {@link AugmentedLIBORMarketModel}.
- *
- * <p>
- * One test per product. Each test checks three things in sequence:
- * <ol>
- *   <li><b>Consistency</b>: The new plug-in model must reproduce the original
- *       {@code LIBORMarketModelFromCovarianceModel} bit-for-bit (same seed).</li>
- *   <li><b>Measure invariance</b>: The price must be the same under the Spot measure,
- *       Terminal measure, and T_k-forward measure for k = 2, 5, 8, 10.</li>
- *   <li><b>Accuracy</b>: The Monte Carlo price is compared against the exact
- *       analytical formula at multiple strikes.</li>
- * </ol>
- *
- * @author Felipe, GM-1, GM-2
- */
 public class LIBORMarketModelPluginTest {
-
-	// -------------------------------------------------------------------------
+    
+    // -------------------------------------------------------------------------
 	// Shared model parameters
 	// -------------------------------------------------------------------------
 
 	/** Number of Monte Carlo paths. */
-	private static final int NUMBER_OF_PATHS = 20000;
+	private static final int NUMBER_OF_PATHS = 250000;
 
 	/** Random seeds — one fixed seed per measure type for consistency within a measure. */
 	private static final int SEED_SPOT     = 3141;
 	private static final int SEED_TERMINAL = 3142;
-	private static final int SEED_FORWARD  = 3143;
+    private static final int SEED_FORWARD10 = 3143;
+    private static final int SEED_FORWARD14 = 3144;
+    private static final int SEED_FORWARD18 = 3145;
 
 	/** Semi-annual tenor and simulation step (0 to 10 years, 20 periods). */
 	private static final double PERIOD_LENGTH = 0.5;
 	private static final double TIME_HORIZON  = 10.0;
 
-	/** Flat forward rate used for the test curve (= at-the-money forward LIBOR). */
+	/** We work with an initial flat forward rate */
 	private static final double FLAT_FORWARD_RATE = 0.03;
 
 	/**
@@ -70,433 +54,285 @@ public class LIBORMarketModelPluginTest {
 	 * \( \sigma(\tau) = (a + b\,\tau)\,e^{-c\,\tau} + d \).
 	 * With b = 0 and d = 0 this simplifies to \( \sigma(\tau) = a\,e^{-c\,\tau} \).
 	 */
-	private static final double VOLATILITY_PARAMETER_A = 0.20;
+	private static final double VOLATILITY_PARAMETER_A = 0.20;  // multiplied with initial forward rate for normal dynamics
 	private static final double VOLATILITY_PARAMETER_B = 0.0;
 	private static final double VOLATILITY_PARAMETER_C = 0.25;
 	private static final double VOLATILITY_PARAMETER_D = 0.0;
 
+	/** 
+	 * Correlation matrix is the factor reduced matrix of the exponential decay
+	 * correlation model \( \rho_{i,j} = \exp(-c\,|T_i - T_j|) \).
+	*/
 	/** Correlation decay parameter. */
 	private static final double CORRELATION_DECAY = 0.10;
 
 	/** Number of Brownian factors. */
-	private static final int NUMBER_OF_FACTORS = 2;
-
-	/**
-	 * Forward measure indices to test for products paying at T_e = 4.0 yr = T_8.
-	 *
-	 * <p>
-	 * The T_k-forward measure is only valid when k ≥ payment tenor index (here k ≥ 8),
-	 * because for k &lt; 8 the numeraire bond P(t, T_k) has already matured at the
-	 * payment date T_e = 4.0 yr, causing getNumeraire(T_e) to incorrectly return 1.
-	 * Index k relates to time via T_k = k × PERIOD_LENGTH (0.5 yr step).
-	 *
-	 * <ul>
-	 *   <li>k =  9 → T_k = 4.5 yr: one period after payment</li>
-	 *   <li>k = 14 → T_k = 7.0 yr: six periods after payment</li>
-	 *   <li>k = 16 → T_k = 8.0 yr: eight periods after payment</li>
-	 *   <li>k = 20 → T_k = 10.0 yr: terminal measure (numeraire = last bond)</li>
-	 * </ul>
-	 */
-	private static final int[] FORWARD_MEASURE_INDICES = { 9, 14, 16, 20 };
-
-	/** Strikes used in the accuracy tests (in decimal, e.g. 0.02 = 2 %). */
-	private static final double[] TEST_STRIKES = { 0.02, 0.03, 0.05, 0.10 };
-
-	/** Tolerance: same seed → bit-for-bit identical results. */
-	private static final double TOLERANCE_EXACT = 1.0E-10;
-
-	/**
-	 * Tolerance for measure invariance: different seeds + possible Euler bias
-	 * when k is far from the natural measure index (k=8).
-	 * At 20,000 paths the Monte Carlo standard error is ~0.5e-3; Euler bias
-	 * for distant k can add another ~2e-3. A bound of 5e-3 covers both.
-	 */
-	private static final double TOLERANCE_MONTE_CARLO = 5.0E-3;
-
-	/**
-	 * Tolerance for Monte Carlo vs analytical formula.
-	 * The Caplet has an O(dt) Euler bias (~7 %), the Forward Rate Agreement has
-	 * no systematic bias (linear payoff). Both fit within this bound.
-	 */
-	private static final double TOLERANCE_ANALYTICAL = 8.0E-3;
+	private static final int NUMBER_OF_FACTORS = 5;
 
 	// =========================================================================
-	// Test 1 — Forward Rate Agreement
+	// Test 1 — Plug-in consistency
 	// =========================================================================
-
-	/**
-	 * All checks for the Forward Rate Agreement (fixing T_s = 3.5 yr, payment T_e = 4.0 yr).
-	 *
-	 * <p>Sections:
-	 * <ol>
-	 *   <li>Consistency: new plug-in vs original finmath-lib (same seed).</li>
-	 *   <li>Measure invariance: Spot, Terminal, and T_k-forward for k = 2, 5, 8, 10.</li>
-	 *   <li>Accuracy: Monte Carlo vs exact formula \( V_0 = (F-K)\,\delta\,P(0,T_e) \)
-	 *       at strikes K = 2 %, 3 %, 5 %, 10 %.</li>
-	 * </ol>
-	 */
 	@Test
-	public void testForwardRateAgreement() throws CalculationException {
-		final double fixingTime  = 3.5;
-		final double paymentTime = 4.0;
+	public void testPlugInConsistency() throws CalculationException {
+		
+        final double fixingTime  = 4.5;
+		final double paymentTime = 5.0;
+        final double notional = 10000.0;
+        final double strikeITM = 0.01;
+        final double strikeOTM = 0.05;
 
-		// ----- Section 1: Consistency ----------------------------------------
-		final TermStructureMonteCarloSimulationModel simulationOriginalSpot     = buildOldSimulation("SPOT",     SEED_SPOT);
-		final TermStructureMonteCarloSimulationModel simulationOriginalTerminal = buildOldSimulation("TERMINAL", SEED_TERMINAL);
-		final TermStructureMonteCarloSimulationModel simulationPluginSpot       = buildNewSimulation(new SpotMeasure(),     SEED_SPOT);
-		final TermStructureMonteCarloSimulationModel simulationPluginTerminal   = buildNewSimulation(new TerminalMeasure(), SEED_TERMINAL);
+        final int fixingTimeIndex = (int) (fixingTime / PERIOD_LENGTH);
 
-		final double originalSpot     = forwardRateAgreementValue(simulationOriginalSpot,     fixingTime, paymentTime, FLAT_FORWARD_RATE);
-		final double originalTerminal = forwardRateAgreementValue(simulationOriginalTerminal, fixingTime, paymentTime, FLAT_FORWARD_RATE);
-		final double pluginSpot       = forwardRateAgreementValue(simulationPluginSpot,       fixingTime, paymentTime, FLAT_FORWARD_RATE);
-		final double pluginTerminal   = forwardRateAgreementValue(simulationPluginTerminal,   fixingTime, paymentTime, FLAT_FORWARD_RATE);
+        final Caplet capletITM = new Caplet(fixingTime, paymentTime-fixingTime, strikeITM);
+        final Caplet capletATM = new Caplet(fixingTime, paymentTime-fixingTime, FLAT_FORWARD_RATE);
+        final Caplet capletOTM = new Caplet(fixingTime, paymentTime-fixingTime, strikeOTM);
 
-		final double relativeErrorSpotInPercent     = Math.abs(originalSpot)     > 1.0E-10
-				? 100.0 * Math.abs(pluginSpot     - originalSpot)     / Math.abs(originalSpot)     : 0.0;
-		final double relativeErrorTerminalInPercent = Math.abs(originalTerminal) > 1.0E-10
-				? 100.0 * Math.abs(pluginTerminal - originalTerminal) / Math.abs(originalTerminal) : 0.0;
 
+		// ----- Section 1: Normal state space transform
+		final LIBORMonteCarloSimulationFromLIBORModel simulationOriginalSpot     = buildOldSimulation("SPOT",     "NORMAL", SEED_SPOT);
+		final LIBORMonteCarloSimulationFromLIBORModel simulationOriginalTerminal = buildOldSimulation("TERMINAL", "NORMAL", SEED_TERMINAL);
+		final LIBORMonteCarloSimulationFromLIBORModel simulationPluginSpot       = buildNewSimulation(new SpotMeasure(), new NormalStateSpaceTransform(), SEED_SPOT);
+		final LIBORMonteCarloSimulationFromLIBORModel simulationPluginTerminal   = buildNewSimulation(new TerminalMeasure(), new NormalStateSpaceTransform(), SEED_TERMINAL);
+
+        // get numerical values
+        final double ITMoriginalSpot      = capletITM.getValue(simulationOriginalSpot) * notional;
+        final double ATMoriginalSpot      = capletATM.getValue(simulationOriginalSpot) * notional;
+        final double OTMoriginalSpot      = capletOTM.getValue(simulationOriginalSpot) * notional;
+
+        final double ITMoriginalTerminal  = capletITM.getValue(simulationOriginalTerminal) * notional;
+        final double ATMoriginalTerminal  = capletATM.getValue(simulationOriginalTerminal) * notional;
+        final double OTMoriginalTerminal  = capletOTM.getValue(simulationOriginalTerminal) * notional;
+
+        final double ITMpluginSpot        = capletITM.getValue(simulationPluginSpot) * notional;
+        final double ATMpluginSpot        = capletATM.getValue(simulationPluginSpot) * notional;
+        final double OTMpluginSpot        = capletOTM.getValue(simulationPluginSpot) * notional;
+
+        final double ITMpluginTerminal    = capletITM.getValue(simulationPluginTerminal) * notional;
+        final double ATMpluginTerminal    = capletATM.getValue(simulationPluginTerminal) * notional;
+        final double OTMpluginTerminal    = capletOTM.getValue(simulationPluginTerminal) * notional;
+
+        // get analytic values for comparison
+        final double normalizedVolatilityParameterA = FLAT_FORWARD_RATE * VOLATILITY_PARAMETER_A; // multiplied with initial forward rate for normal dynamics
+        final double ITMtheoretical = getAnalyticCapletValue("NORMAL", FLAT_FORWARD_RATE, strikeITM, fixingTimeIndex, normalizedVolatilityParameterA, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double ATMtheoretical = getAnalyticCapletValue("NORMAL", FLAT_FORWARD_RATE, FLAT_FORWARD_RATE, fixingTimeIndex, normalizedVolatilityParameterA, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double OTMtheoretical = getAnalyticCapletValue("NORMAL", FLAT_FORWARD_RATE, strikeOTM, fixingTimeIndex, normalizedVolatilityParameterA, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+
+        System.out.println("=".repeat(80));
+		System.out.println("  Normal State Space Transform (Bachelier)");
+		System.out.println("  Numerical Valuation of a caplet | Fixing = 4.5 yr, Payment = 5.0 yr | Flat initial forward curve at 3 %");
 		System.out.println("=".repeat(80));
-		System.out.println("  EXERCISE 2 — Measure Plug-in");
-		System.out.println("  FORWARD RATE AGREEMENT  |  Fixing = 3.5 yr, Payment = 4.0 yr");
+		System.out.println("");
+
+        // ITM caplet
+		System.out.println("  --- ITM Caplet (strike = 1 %) | Theoretical value: " + ITMtheoretical);
+		System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "Measure", "Original", "Plug-in", "Abs. Error");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Spot",     ITMoriginalSpot,     ITMpluginSpot,     Math.abs(ITMoriginalSpot - ITMpluginSpot));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Terminal", ITMoriginalTerminal, ITMpluginTerminal, Math.abs(ITMoriginalTerminal - ITMpluginTerminal));
+		System.out.println("  " + "-".repeat(70));
+        System.out.println("");
+
+        Assertions.assertEquals(ITMoriginalSpot,     ITMpluginSpot,     1e-10, "ITM caplet consistency: Spot under Bachelier");
+		Assertions.assertEquals(ITMoriginalTerminal, ITMpluginTerminal, 1e-10, "ITM caplet consistency: Terminal under Bachelier");
+
+        // ATM caplet
+        System.out.println("  --- ATM Caplet (strike = 3 %) | Theoretical value: " + ATMtheoretical);
+        System.out.println("  " + "-".repeat(70));  
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "Measure", "Original", "Plug-in", "Abs. Error");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Spot",     ATMoriginalSpot,     ATMpluginSpot,     Math.abs(ATMoriginalSpot - ATMpluginSpot));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Terminal", ATMoriginalTerminal, ATMpluginTerminal, Math.abs(ATMoriginalTerminal - ATMpluginTerminal));
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");
+
+        Assertions.assertEquals(ATMoriginalSpot,     ATMpluginSpot,     1e-10, "ATM caplet consistency: Spot under Bachelier");
+        Assertions.assertEquals(ATMoriginalTerminal, ATMpluginTerminal, 1e-10, "ATM caplet consistency: Terminal under Bachelier");
+
+        // OTM caplet
+        System.out.println("  --- OTM Caplet (strike = 5 %) | Theoretical value: " + OTMtheoretical);
+        System.out.println("  " + "-".repeat(70));  
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "Measure", "Original", "Plug-in", "Abs. Error");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Spot",     OTMoriginalSpot,     OTMpluginSpot,     Math.abs(OTMoriginalSpot - OTMpluginSpot));  
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Terminal", OTMoriginalTerminal, OTMpluginTerminal, Math.abs(OTMoriginalTerminal - OTMpluginTerminal));
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");
+
+        Assertions.assertEquals(OTMoriginalSpot,     OTMpluginSpot,     1e-10, "OTM caplet consistency: Spot under Bachelier");
+        Assertions.assertEquals(OTMoriginalTerminal, OTMpluginTerminal, 1e-10, "OTM caplet consistency: Terminal under Bachelier");
+
+
+        // ----- Section 2: Log-normal state space transform
+        final LIBORMonteCarloSimulationFromLIBORModel simulationOriginalSpotLognormal     = buildOldSimulation("SPOT",     "LOGNORMAL", SEED_SPOT);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationOriginalTerminalLognormal = buildOldSimulation("TERMINAL", "LOGNORMAL", SEED_TERMINAL);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginSpotLognormal       = buildNewSimulation(new SpotMeasure(), new LogNormalStateSpaceTransform(), SEED_SPOT);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginTerminalLognormal   = buildNewSimulation(new TerminalMeasure(), new LogNormalStateSpaceTransform(), SEED_TERMINAL);
+
+        final double ITMoriginalSpotLognormal      = capletITM.getValue(simulationOriginalSpotLognormal) * notional;
+        final double ATMoriginalSpotLognormal      = capletATM.getValue(simulationOriginalSpotLognormal) * notional;
+        final double OTMoriginalSpotLognormal      = capletOTM.getValue(simulationOriginalSpotLognormal) * notional;
+
+        final double ITMoriginalTerminalLognormal  = capletITM.getValue(simulationOriginalTerminalLognormal) * notional;
+        final double ATMoriginalTerminalLognormal  = capletATM.getValue(simulationOriginalTerminalLognormal) * notional;
+        final double OTMoriginalTerminalLognormal  = capletOTM.getValue(simulationOriginalTerminalLognormal) * notional;
+
+        final double ITMpluginSpotLognormal        = capletITM.getValue(simulationPluginSpotLognormal) * notional;
+        final double ATMpluginSpotLognormal        = capletATM.getValue(simulationPluginSpotLognormal) * notional;
+        final double OTMpluginSpotLognormal        = capletOTM.getValue(simulationPluginSpotLognormal) * notional;
+
+        final double ITMpluginTerminalLognormal    = capletITM.getValue(simulationPluginTerminalLognormal) * notional;
+        final double ATMpluginTerminalLognormal    = capletATM.getValue(simulationPluginTerminalLognormal) * notional;
+        final double OTMpluginTerminalLognormal    = capletOTM.getValue(simulationPluginTerminalLognormal) * notional;
+
+        // get analytic values for comparison
+        final double ITMtheoreticalBlack = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, strikeITM, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double ATMtheoreticalBlack = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, FLAT_FORWARD_RATE, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double OTMtheoreticalBlack = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, strikeOTM, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+
+        System.out.println("=".repeat(80));
+		System.out.println("  Lognormal State Space Transform (Black)");
+		System.out.println("  Numerical Valuation of a caplet | Fixing = 4.5 yr, Payment = 5.0 yr | Flat initial forward curve at 3 %");
 		System.out.println("=".repeat(80));
 		System.out.println("");
-		System.out.println("  --- CONSISTENCY: does our new plug-in reproduce the original finmath-lib?");
+
+        // ITM caplet
+		System.out.println("  --- ITM Caplet (strike = 1 %) | Theoretical value: " + ITMtheoreticalBlack);
 		System.out.println("  " + "-".repeat(70));
-		System.out.printf("  %-18s  %12s  %12s  %12s%n", "Measure", "Original", "Plug-in", "Rel. Error");
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "Measure", "Original", "Plug-in", "Abs. Error");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Spot",     ITMoriginalSpotLognormal,     ITMpluginSpotLognormal,     Math.abs(ITMoriginalSpotLognormal - ITMpluginSpotLognormal));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Terminal", ITMoriginalTerminalLognormal, ITMpluginTerminalLognormal, Math.abs(ITMoriginalTerminalLognormal - ITMpluginTerminalLognormal));
 		System.out.println("  " + "-".repeat(70));
-		System.out.printf("  %-18s  %+12.6f  %+12.6f  %11.2f %%%n", "Spot",     originalSpot,     pluginSpot,     relativeErrorSpotInPercent);
-		System.out.printf("  %-18s  %+12.6f  %+12.6f  %11.2f %%%n", "Terminal", originalTerminal, pluginTerminal, relativeErrorTerminalInPercent);
-		System.out.println("  " + "-".repeat(70));
-		System.out.println("");
+        System.out.println("");
 
-		Assertions.assertEquals(originalSpot,     pluginSpot,     TOLERANCE_EXACT, "Forward Rate Agreement consistency: Spot");
-		Assertions.assertEquals(originalTerminal, pluginTerminal, TOLERANCE_EXACT, "Forward Rate Agreement consistency: Terminal");
+        Assertions.assertEquals(ITMoriginalSpotLognormal,     ITMpluginSpotLognormal,     1e-10, "ITM caplet consistency: Spot under Black");
+		Assertions.assertEquals(ITMoriginalTerminalLognormal, ITMpluginTerminalLognormal, 1e-10, "ITM caplet consistency: Terminal under Black");
 
-		// ----- Section 2: Measure invariance --------------------------------
-		final TermStructureMonteCarloSimulationModel simulationSpot     = buildNewSimulation(new SpotMeasure(),     SEED_SPOT);
-		final TermStructureMonteCarloSimulationModel simulationTerminal = buildNewSimulation(new TerminalMeasure(), SEED_TERMINAL);
-		final double priceUnderSpot     = forwardRateAgreementValue(simulationSpot,     fixingTime, paymentTime, FLAT_FORWARD_RATE);
-		final double priceUnderTerminal = forwardRateAgreementValue(simulationTerminal, fixingTime, paymentTime, FLAT_FORWARD_RATE);
-		System.out.println("  --- MEASURE INVARIANCE: theoretical value = 0.000000 (at-the-money)");
-		System.out.println("  Note: k >= 8 required (T_k >= payment date T_e = 4.0 yr).");
-		System.out.println("  " + "-".repeat(67));
-		System.out.printf("  %-34s  %12s  %18s%n", "Measure", "Price", "Abs. Error vs Spot");
-		System.out.println("  " + "-".repeat(67));
-		System.out.printf("  %-34s  %+12.6f  %18s%n",   "Spot measure (reference)", priceUnderSpot,     "—");
-		System.out.printf("  %-34s  %+12.6f  %18.6f%n", "Terminal measure",         priceUnderTerminal, Math.abs(priceUnderTerminal - priceUnderSpot));
+        // ATM caplet
+        System.out.println("  --- ATM Caplet (strike = 3 %) | Theoretical value: " + ATMtheoreticalBlack);
+        System.out.println("  " + "-".repeat(70));  
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "Measure", "Original", "Plug-in", "Abs. Error");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Spot",     ATMoriginalSpotLognormal,     ATMpluginSpotLognormal,     Math.abs(ATMoriginalSpotLognormal - ATMpluginSpotLognormal));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Terminal", ATMoriginalTerminalLognormal, ATMpluginTerminalLognormal, Math.abs(ATMoriginalTerminalLognormal - ATMpluginTerminalLognormal));
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");
 
-		Assertions.assertEquals(priceUnderSpot, priceUnderTerminal, TOLERANCE_MONTE_CARLO, "Forward Rate Agreement: Spot vs Terminal");
+        Assertions.assertEquals(ATMoriginalSpotLognormal,     ATMpluginSpotLognormal,     1e-10, "ATM caplet consistency: Spot under Black");
+        Assertions.assertEquals(ATMoriginalTerminalLognormal, ATMpluginTerminalLognormal, 1e-10, "ATM caplet consistency: Terminal under Black");
 
-		for(int i = 0; i < FORWARD_MEASURE_INDICES.length; i++) {
-			final int k = FORWARD_MEASURE_INDICES[i];
-			final TermStructureMonteCarloSimulationModel simulationForward =
-					buildNewSimulation(new ForwardMeasure(k), SEED_FORWARD);
-			final double price = forwardRateAgreementValue(simulationForward, fixingTime, paymentTime, FLAT_FORWARD_RATE);
-			System.out.printf("  %-34s  %+12.6f  %18.6f%n",
-					"Forward measure (k=" + k + ", T=" + (k * PERIOD_LENGTH) + "yr)", price, Math.abs(price - priceUnderSpot));
-			Assertions.assertEquals(priceUnderSpot, price, TOLERANCE_MONTE_CARLO, "Forward Rate Agreement: Spot vs Forward measure k=" + k);
-		}
-		System.out.println("  " + "-".repeat(67));
-		System.out.println("");
+        // OTM caplet
+        System.out.println("  --- OTM Caplet (strike = 5 %) | Theoretical value: " + OTMtheoreticalBlack);
+        System.out.println("  " + "-".repeat(70));  
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "Measure", "Original", "Plug-in", "Abs. Error");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Spot",     OTMoriginalSpotLognormal,     OTMpluginSpotLognormal,     Math.abs(OTMoriginalSpotLognormal - OTMpluginSpotLognormal));  
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Terminal", OTMoriginalTerminalLognormal, OTMpluginTerminalLognormal, Math.abs(OTMoriginalTerminalLognormal - OTMpluginTerminalLognormal));
+        System.out.println("  " + "-".repeat(70));
+        System.out.println(""); 
 
-		// ----- Section 3: Accuracy -------------------------------------------
-		final double zeroCouponBond = Math.pow(1.0 / (1.0 + FLAT_FORWARD_RATE * PERIOD_LENGTH), paymentTime / PERIOD_LENGTH);
-		System.out.println("  --- ACCURACY: Monte Carlo vs exact formula V_0 = (F - K) * delta * P(0, T_e)");
-		System.out.println("  Note: Linear payoff — no Euler discretisation bias, only Monte Carlo noise.");
-		System.out.println("  Rel. Error = (Monte Carlo - Theoretical) / |Theoretical|.");
-		System.out.println("  " + "-".repeat(70));
-		System.out.printf("  %-10s  %14s  %14s  %14s  %14s%n", "Strike", "Monte Carlo", "Theoretical", "Abs. Error", "Rel. Error");
-		System.out.println("  " + "-".repeat(70));
-
-		for(final double strike : TEST_STRIKES) {
-			final double monteCarloValue  = forwardRateAgreementValue(simulationSpot, fixingTime, paymentTime, strike);
-			final double theoreticalValue = (FLAT_FORWARD_RATE - strike) * PERIOD_LENGTH * zeroCouponBond;
-			final double absoluteError    = monteCarloValue - theoreticalValue;
-			final double relativeErrorInPercent = Math.abs(theoreticalValue) > 1.0E-10
-					? 100.0 * absoluteError / Math.abs(theoreticalValue) : Double.NaN;
-
-			if(Double.isNaN(relativeErrorInPercent)) {
-				System.out.printf("  %8.2f %%  %+14.6f  %+14.6f  %+14.6f  %14s%n",
-						strike * 100.0, monteCarloValue, theoreticalValue, absoluteError, "N/A (K=F)");
-			} else {
-				System.out.printf("  %8.2f %%  %+14.6f  %+14.6f  %+14.6f  %+13.2f %%%n",
-						strike * 100.0, monteCarloValue, theoreticalValue, absoluteError, relativeErrorInPercent);
-			}
-
-			Assertions.assertEquals(theoreticalValue, monteCarloValue, TOLERANCE_ANALYTICAL,
-					String.format("Forward Rate Agreement accuracy at K = %.0f %%", strike * 100.0));
-		}
-		System.out.println("  " + "-".repeat(70));
-		System.out.println("");
-		System.out.println();
+        Assertions.assertEquals(OTMoriginalSpotLognormal,     OTMpluginSpotLognormal,     1e-10, "OTM caplet consistency: Spot under Black");
+        Assertions.assertEquals(OTMoriginalTerminalLognormal, OTMpluginTerminalLognormal, 1e-10, "OTM caplet consistency: Terminal under Black");
 	}
 
-	// =========================================================================
-	// Test 3 — State-Space Transform
-	// =========================================================================
-
-	/**
-	 * Verifies that the state-space plug-in reproduces the original model bit-for-bit,
-	 * and shows how the Caplet price differs between Normal and Log-Normal state spaces.
-	 *
-	 * <p>Sections:
-	 * <ol>
-	 *   <li><b>Consistency (Normal)</b>: {@link NormalStateSpaceTransform} must reproduce
-	 *       the original model with {@code StateSpace.NORMAL} bit-for-bit (same seed).</li>
-	 *   <li><b>Consistency (Log-Normal)</b>: {@link LogNormalStateSpaceTransform} must reproduce
-	 *       the original model with {@code StateSpace.LOGNORMAL} bit-for-bit (same seed).</li>
-	 *   <li><b>State-space comparison</b>: Caplet and FRA prices under Normal vs Log-Normal
-	 *       are shown at multiple strikes. They should differ because the distributional
-	 *       assumptions are different (Bachelier vs Black dynamics).</li>
-	 * </ol>
-	 */
 	@Test
-	public void testStateSpaceTransform() throws CalculationException {
-		final double fixingTime  = 3.5;
-		final double paymentTime = 4.0;
+	public void testForwardMeasurePlugIn() throws CalculationException {
 
-		// ----- Section 1: Consistency (Normal) -------------------------------
-		final TermStructureMonteCarloSimulationModel simOldNormal  =
-				buildOldSimulation("SPOT", "NORMAL", SEED_SPOT);
-		final TermStructureMonteCarloSimulationModel simPluginNormal =
-				buildNewSimulation(new SpotMeasure(), new NormalStateSpaceTransform(), SEED_SPOT);
+        final double fixingTime  = 4.5;
+		final double paymentTime = 5.0;
+        final double notional = 10000.0;
+        final double strikeITM = 0.01;
+        final double strikeOTM = 0.05;
 
-		final double oldCapletNormal    = capletValue(simOldNormal,    fixingTime, paymentTime, FLAT_FORWARD_RATE);
-		final double pluginCapletNormal = capletValue(simPluginNormal, fixingTime, paymentTime, FLAT_FORWARD_RATE);
+        final int fixingTimeIndex = (int) (fixingTime / PERIOD_LENGTH);
 
-		// ----- Section 2: Consistency (Log-Normal) ---------------------------
-		final TermStructureMonteCarloSimulationModel simOldLogNormal  =
-				buildOldSimulation("SPOT", "LOGNORMAL", SEED_SPOT);
-		final TermStructureMonteCarloSimulationModel simPluginLogNormal =
-				buildNewSimulation(new SpotMeasure(), new LogNormalStateSpaceTransform(), SEED_SPOT);
+        final Caplet capletITM = new Caplet(fixingTime, paymentTime-fixingTime, strikeITM);
+        final Caplet capletATM = new Caplet(fixingTime, paymentTime-fixingTime, FLAT_FORWARD_RATE);
+        final Caplet capletOTM = new Caplet(fixingTime, paymentTime-fixingTime, strikeOTM);
+        
+        // Numerical valuation with normal state space transform
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginForward10    = buildNewSimulation(new ForwardMeasure(10), new NormalStateSpaceTransform(), SEED_FORWARD10);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginForward14    = buildNewSimulation(new ForwardMeasure(14), new NormalStateSpaceTransform(), SEED_FORWARD14);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginForward18    = buildNewSimulation(new ForwardMeasure(18), new NormalStateSpaceTransform(), SEED_FORWARD18);  
 
-		final double oldCapletLogNormal    = capletValue(simOldLogNormal,    fixingTime, paymentTime, FLAT_FORWARD_RATE);
-		final double pluginCapletLogNormal = capletValue(simPluginLogNormal, fixingTime, paymentTime, FLAT_FORWARD_RATE);
+        final double ITMforward10 = capletITM.getValue(simulationPluginForward10) * notional;
+        final double ATMforward10 = capletATM.getValue(simulationPluginForward10) * notional;
+        final double OTMforward10 = capletOTM.getValue(simulationPluginForward10) * notional;
 
-		System.out.println("=".repeat(80));
-		System.out.println("  EXERCISE 6 — State-Space Transform Plug-in");
-		System.out.println("  STATE-SPACE TRANSFORM  |  Spot measure, Fixing = 3.5 yr, Payment = 4.0 yr");
-		System.out.println("=".repeat(80));
-		System.out.println("");
-		System.out.println("  --- CONSISTENCY: plug-in model vs original StateSpace enum (same seed → bit-for-bit)");
-		System.out.println("  The absolute error is exactly 0 because both models execute identical floating-point");
-		System.out.println("  operations in the same order on the same Brownian paths (deterministic reproduction).");
-		System.out.println("  " + "-".repeat(74));
-		System.out.printf("  %-22s  %12s  %12s  %12s%n", "State Space", "Original", "Plug-in", "Abs. Error");
-		System.out.println("  " + "-".repeat(74));
-		System.out.printf("  %-22s  %+12.6f  %+12.6f  %+12.2e%n",
-				"Normal (Bachelier)",    oldCapletNormal,    pluginCapletNormal,    Math.abs(pluginCapletNormal    - oldCapletNormal));
-		System.out.printf("  %-22s  %+12.6f  %+12.6f  %+12.2e%n",
-				"Log-Normal (Black)",   oldCapletLogNormal, pluginCapletLogNormal, Math.abs(pluginCapletLogNormal - oldCapletLogNormal));
-		System.out.println("  " + "-".repeat(74));
-		System.out.println("");
+        final double ATMforward14 = capletATM.getValue(simulationPluginForward14) * notional;
+        final double OTMforward14 = capletOTM.getValue(simulationPluginForward14) * notional;
+        final double ITMforward14 = capletITM.getValue(simulationPluginForward14) * notional;
 
-		Assertions.assertEquals(oldCapletNormal,    pluginCapletNormal,    TOLERANCE_EXACT, "State-space consistency: NormalStateSpaceTransform vs StateSpace.NORMAL");
-		Assertions.assertEquals(oldCapletLogNormal, pluginCapletLogNormal, TOLERANCE_EXACT, "State-space consistency: LogNormalStateSpaceTransform vs StateSpace.LOGNORMAL");
+        final double ATMforward18 = capletATM.getValue(simulationPluginForward18) * notional;
+        final double OTMforward18 = capletOTM.getValue(simulationPluginForward18) * notional;
+        final double ITMforward18 = capletITM.getValue(simulationPluginForward18) * notional;
 
-		// ----- Section 3: State-space comparison -----------------------------
-		System.out.println("  --- STATE-SPACE COMPARISON: Caplet price — Normal vs Log-Normal (Spot measure)");
-		System.out.println("  Note: prices differ because Normal and Log-Normal impose different dynamics.");
-		System.out.println("  " + "-".repeat(70));
-		System.out.printf("  %-10s  %14s  %14s  %14s%n", "Strike", "Normal", "Log-Normal", "Difference");
-		System.out.println("  " + "-".repeat(70));
 
-		for(final double strike : TEST_STRIKES) {
-			final double capletNormal    = capletValue(simPluginNormal,    fixingTime, paymentTime, strike);
-			final double capletLogNormal = capletValue(simPluginLogNormal, fixingTime, paymentTime, strike);
-			System.out.printf("  %8.2f %%  %+14.6f  %+14.6f  %+14.6f%n",
-					strike * 100.0, capletNormal, capletLogNormal, capletLogNormal - capletNormal);
-		}
-		System.out.println("  " + "-".repeat(70));
-		System.out.println("");
-		System.out.println("=".repeat(80));
-		System.out.println();
-	}
 
-	// =========================================================================
-	// Test 2 — Caplet
-	// =========================================================================
+        // Numerical valuation with lognormal state space transform
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginForward10Lognormal    = buildNewSimulation(new ForwardMeasure(10), new LogNormalStateSpaceTransform(), SEED_FORWARD10);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginForward14Lognormal    = buildNewSimulation(new ForwardMeasure(14), new LogNormalStateSpaceTransform(), SEED_FORWARD14);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginForward18Lognormal    = buildNewSimulation(new ForwardMeasure(18), new LogNormalStateSpaceTransform(), SEED_FORWARD18);
 
-	/**
-	 * All checks for the Caplet (fixing T_s = 3.5 yr, payment T_e = 4.0 yr).
-	 *
-	 * <p>Sections:
-	 * <ol>
-	 *   <li>Consistency: new plug-in vs original finmath-lib (same seed).</li>
-	 *   <li>Measure invariance: Spot, Terminal, and T_k-forward for k = 2, 5, 8, 10.</li>
-	 *   <li>Accuracy: Monte Carlo vs Bachelier analytical formula at strikes
-	 *       K = 2 %, 3 %, 5 %, 10 %. Remaining error is Euler discretisation bias O(dt).</li>
-	 * </ol>
-	 */
-	@Test
-	public void testCaplet() throws CalculationException {
-		final double fixingTime  = 3.5;
-		final double paymentTime = 4.0;
+        final double ITMforward10Lognormal = capletITM.getValue(simulationPluginForward10Lognormal) * notional;
+        final double ATMforward10Lognormal = capletATM.getValue(simulationPluginForward10Lognormal) * notional;
+        final double OTMforward10Lognormal = capletOTM.getValue(simulationPluginForward10Lognormal) * notional;
 
-		// ----- Section 1: Consistency ----------------------------------------
-		final TermStructureMonteCarloSimulationModel simulationOriginalSpot     = buildOldSimulation("SPOT",     SEED_SPOT);
-		final TermStructureMonteCarloSimulationModel simulationOriginalTerminal = buildOldSimulation("TERMINAL", SEED_TERMINAL);
-		final TermStructureMonteCarloSimulationModel simulationPluginSpot       = buildNewSimulation(new SpotMeasure(),     SEED_SPOT);
-		final TermStructureMonteCarloSimulationModel simulationPluginTerminal   = buildNewSimulation(new TerminalMeasure(), SEED_TERMINAL);
+        final double ITMforward14Lognormal = capletITM.getValue(simulationPluginForward14Lognormal) * notional;
+        final double ATMforward14Lognormal = capletATM.getValue(simulationPluginForward14Lognormal) * notional;
+        final double OTMforward14Lognormal = capletOTM.getValue(simulationPluginForward14Lognormal) * notional;
 
-		final double originalSpot     = capletValue(simulationOriginalSpot,     fixingTime, paymentTime, FLAT_FORWARD_RATE);
-		final double originalTerminal = capletValue(simulationOriginalTerminal, fixingTime, paymentTime, FLAT_FORWARD_RATE);
-		final double pluginSpot       = capletValue(simulationPluginSpot,       fixingTime, paymentTime, FLAT_FORWARD_RATE);
-		final double pluginTerminal   = capletValue(simulationPluginTerminal,   fixingTime, paymentTime, FLAT_FORWARD_RATE);
+        final double ITMforward18Lognormal = capletITM.getValue(simulationPluginForward18Lognormal) * notional;
+        final double ATMforward18Lognormal = capletATM.getValue(simulationPluginForward18Lognormal) * notional;
+        final double OTMforward18Lognormal = capletOTM.getValue(simulationPluginForward18Lognormal) * notional;
 
-		System.out.println("=".repeat(80));
-		System.out.println("  EXERCISE 2 — Measure Plug-in");
-		System.out.println("  CAPLET  |  Fixing = 3.5 yr, Payment = 4.0 yr, Strike = forward rate (3 %)");
-		System.out.println("=".repeat(80));
-		System.out.println("  --- CONSISTENCY: does our new plug-in reproduce the original finmath-lib?");
-		System.out.println("  " + "-".repeat(58));
-		System.out.printf("  %-18s  %12s  %12s  %12s%n", "Measure", "Original", "Plug-in", "Rel. Error");
-		System.out.println("  " + "-".repeat(58));
-		System.out.printf("  %-18s  %+12.6f  %+12.6f  %11.2f %%%n", "Spot",     originalSpot,     pluginSpot,
-				100.0 * Math.abs(pluginSpot - originalSpot) / Math.abs(originalSpot));
-		System.out.printf("  %-18s  %+12.6f  %+12.6f  %11.2f %%%n", "Terminal", originalTerminal, pluginTerminal,
-				100.0 * Math.abs(pluginTerminal - originalTerminal) / Math.abs(originalTerminal));
-		System.out.println("  " + "-".repeat(58));
-		System.out.println("");
+        // Analytic valuation for normal case
+        final double normalizedVolatilityParameterA = FLAT_FORWARD_RATE * VOLATILITY_PARAMETER_A; // multiplied with initial forward rate for normal dynamics
+        final double ITMtheoretical = getAnalyticCapletValue("NORMAL", FLAT_FORWARD_RATE, strikeITM, fixingTimeIndex, normalizedVolatilityParameterA, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double ATMtheoretical = getAnalyticCapletValue("NORMAL", FLAT_FORWARD_RATE, FLAT_FORWARD_RATE, fixingTimeIndex, normalizedVolatilityParameterA, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double OTMtheoretical = getAnalyticCapletValue("NORMAL", FLAT_FORWARD_RATE, strikeOTM, fixingTimeIndex, normalizedVolatilityParameterA, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
 
-		Assertions.assertEquals(originalSpot,     pluginSpot,     TOLERANCE_EXACT, "Caplet consistency: Spot");
-		Assertions.assertEquals(originalTerminal, pluginTerminal, TOLERANCE_EXACT, "Caplet consistency: Terminal");
+        // Analytic valuation for lognormal case
+        final double ITMtheoreticalBlack = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, strikeITM, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double ATMtheoreticalBlack = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, FLAT_FORWARD_RATE, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double OTMtheoreticalBlack = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, strikeOTM, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
 
-		// ----- Section 2: Measure invariance --------------------------------
-		final TermStructureMonteCarloSimulationModel simulationSpot     = buildNewSimulation(new SpotMeasure(),     SEED_SPOT);
-		final TermStructureMonteCarloSimulationModel simulationTerminal = buildNewSimulation(new TerminalMeasure(), SEED_TERMINAL);
-		final double priceUnderSpot     = capletValue(simulationSpot,     fixingTime, paymentTime, FLAT_FORWARD_RATE);
-		final double priceUnderTerminal = capletValue(simulationTerminal, fixingTime, paymentTime, FLAT_FORWARD_RATE);
+        System.out.println("=".repeat(80));
+        System.out.println("  Forward Measure Plug-in");   
+        System.out.println("  Numerical Valuation of a caplet | Fixing = 4.5 yr, Payment = 5.0 yr | Flat initial forward curve at 3 %");
+        System.out.println("=".repeat(80));
+        System.out.println("");
 
-		System.out.println("  --- MEASURE INVARIANCE");
-		System.out.println("  Note: k >= 8 required (T_k >= payment date T_e = 4.0 yr).");
-		System.out.println("  " + "-".repeat(67));
-		System.out.printf("  %-34s  %12s  %18s%n", "Measure", "Price", "Rel. Error vs Spot");
-		System.out.println("  " + "-".repeat(67));
-		System.out.printf("  %-34s  %+12.6f  %18s%n",   "Spot measure (reference)", priceUnderSpot,     "—");
-		System.out.printf("  %-34s  %+12.6f  %17.2f %%%n", "Terminal measure",       priceUnderTerminal,
-				100.0 * Math.abs(priceUnderTerminal - priceUnderSpot) / priceUnderSpot);
+        System.out.println("--- ITM Caplet (strike = 1 %) | Theoretical value: " + ITMtheoretical + " under Bachelier, " + ITMtheoreticalBlack + " under Black");
+        System.out.println("-".repeat(70));
+        System.out.printf("%-18s  %12s  %12s  %12s%n", "State Space", "Forward 10", "Forward 14", "Forward 18");
+        System.out.println("-".repeat(70));
+        System.out.printf("%-18s  %+12.6f  %+12.6f  %+12.6f%n", "Normal", ITMforward10, ITMforward14, ITMforward18);
+        System.out.printf("%-18s  %+12.6f  %+12.6f  %+12.6f%n", "Lognormal", ITMforward10Lognormal, ITMforward14Lognormal, ITMforward18Lognormal);
+        System.out.println("-".repeat(70));
+        System.out.println("");
 
-		Assertions.assertEquals(priceUnderSpot, priceUnderTerminal, TOLERANCE_MONTE_CARLO, "Caplet: Spot vs Terminal");
+        System.out.println("--- ATM Caplet (strike = 3 %) | Theoretical value: " + ATMtheoretical + " under Bachelier, " + ATMtheoreticalBlack + " under Black");
+        System.out.println("-".repeat(70));
+        System.out.printf("%-18s  %12s  %12s  %12s%n", "State Space", "Forward 10", "Forward 14", "Forward 18");
+        System.out.println("-".repeat(70));
+        System.out.printf("%-18s  %+12.6f  %+12.6f  %+12.6f%n", "Normal", ATMforward10, ATMforward14, ATMforward18);
+        System.out.printf("%-18s  %+12.6f  %+12.6f  %+12.6f%n", "Lognormal", ATMforward10Lognormal, ATMforward14Lognormal, ATMforward18Lognormal);
+        System.out.println("-".repeat(70));
+        System.out.println("");
 
-		for(int i = 0; i < FORWARD_MEASURE_INDICES.length; i++) {
-			final int k = FORWARD_MEASURE_INDICES[i];
-			final TermStructureMonteCarloSimulationModel simulationForward =
-					buildNewSimulation(new ForwardMeasure(k), SEED_FORWARD);
-			final double price = capletValue(simulationForward, fixingTime, paymentTime, FLAT_FORWARD_RATE);
-			System.out.printf("  %-34s  %+12.6f  %17.2f %%%n",
-					"Forward measure (k=" + k + ", T=" + (k * PERIOD_LENGTH) + "yr)", price,
-					100.0 * Math.abs(price - priceUnderSpot) / priceUnderSpot);
-			Assertions.assertEquals(priceUnderSpot, price, TOLERANCE_MONTE_CARLO, "Caplet: Spot vs Forward measure k=" + k);
-		}
-		System.out.println("  " + "-".repeat(67));
-		System.out.println("");
+        System.out.println("--- OTM Caplet (strike = 5 %) | Theoretical value: " + OTMtheoretical + " under Bachelier, " + OTMtheoreticalBlack + " under Black");
+        System.out.println("-".repeat(70));
+        System.out.printf("%-18s  %12s  %12s  %12s%n", "State Space", "Forward 10", "Forward 14", "Forward 18");
+        System.out.println("-".repeat(70));
+        System.out.printf("%-18s  %+12.6f  %+12.6f  %+12.6f%n", "Normal", OTMforward10, OTMforward14, OTMforward18);
+        System.out.printf("%-18s  %+12.6f  %+12.6f  %+12.6f%n", "Lognormal", OTMforward10Lognormal, OTMforward14Lognormal, OTMforward18Lognormal);
+        System.out.println("-".repeat(70));
+        System.out.println("");
 
-		// ----- Section 3: Accuracy -------------------------------------------
-		// Bachelier effective annualised vol: sigma(tau) = a*exp(-c*tau)
-		// Integrated variance = (a^2 / 2c) * (1 - exp(-2c * T_s))
-		final double integratedVariance     = (VOLATILITY_PARAMETER_A * VOLATILITY_PARAMETER_A / (2.0 * VOLATILITY_PARAMETER_C))
-				* (1.0 - Math.exp(-2.0 * VOLATILITY_PARAMETER_C * fixingTime));
-		final double bachelierAnnualisedVol = Math.sqrt(integratedVariance / fixingTime);
-		final double zeroCouponBond         = Math.pow(1.0 / (1.0 + FLAT_FORWARD_RATE * PERIOD_LENGTH), paymentTime / PERIOD_LENGTH);
-		final double payoffUnit             = PERIOD_LENGTH * zeroCouponBond;
+    }
 
-		System.out.println("  --- ACCURACY: Monte Carlo vs Bachelier analytical formula");
-		System.out.printf("  Bachelier annualised vol = %.6f  |  Payoff unit = %.6f%n", bachelierAnnualisedVol, payoffUnit);
-		System.out.println("  Note: Analytical = Bachelier formula (exact continuous-time price).");
-		System.out.println("  Rel. Error = (Monte Carlo - Analytical) / Analytical.");
-		System.out.println("  " + "-".repeat(70));
-		System.out.printf("  %-10s  %14s  %14s  %14s  %14s%n", "Strike", "Monte Carlo", "Analytical", "Abs. Error", "Rel. Error");
-		System.out.println("  " + "-".repeat(70));
-
-		for(final double strike : TEST_STRIKES) {
-			final double monteCarloValue    = capletValue(simulationSpot, fixingTime, paymentTime, strike);
-			final double analyticalValue    = AnalyticFormulas.bachelierOptionValue(
-					FLAT_FORWARD_RATE, bachelierAnnualisedVol, fixingTime, strike, payoffUnit);
-			final double absoluteError      = monteCarloValue - analyticalValue;
-			final double relativeErrorInPercent = 100.0 * absoluteError / analyticalValue;
-
-			System.out.printf("  %8.2f %%  %+14.6f  %+14.6f  %+14.6f  %+13.2f %%%n",
-					strike * 100.0, monteCarloValue, analyticalValue, absoluteError, relativeErrorInPercent);
-
-			Assertions.assertEquals(analyticalValue, monteCarloValue, TOLERANCE_ANALYTICAL,
-					String.format("Caplet accuracy at K = %.0f %%", strike * 100.0));
-		}
-		System.out.println("  " + "-".repeat(70));
-		System.out.println("");
-		System.out.println("  Remaining error is Euler discretisation bias: O(dt) with dt = " + PERIOD_LENGTH + " yr.");
-		System.out.println("=".repeat(80));
-		System.out.println();
-	}
-
-	// -------------------------------------------------------------------------
-	// Product pricing helpers
-	// -------------------------------------------------------------------------
-
-	/**
-	 * Prices a Forward Rate Agreement at time 0.
-	 *
-	 * <p>
-	 * The Forward Rate Agreement pays \( (L(T_s, T_e) - K) \cdot \delta \) at \( T_e \).
-	 * Its value at time 0 is:
-	 * \[
-	 *   V_0 = \mathrm{E}\!\left[\frac{N(0)}{N(T_e)} \cdot (L(T_s,T_e;\,T_s) - K) \cdot \delta\right]
-	 * \]
-	 *
-	 * @param simulation  The Monte Carlo simulation.
-	 * @param fixingTime  \( T_s \) — the LIBOR fixing date.
-	 * @param paymentTime \( T_e \) — the payment date.
-	 * @param strike      \( K \) — the fixed rate.
-	 * @return Monte Carlo estimate of the Forward Rate Agreement value.
-	 */
-	private double forwardRateAgreementValue(
-			final TermStructureMonteCarloSimulationModel simulation,
-			final double fixingTime,
-			final double paymentTime,
-			final double strike) throws CalculationException {
-
-		final double periodLength = paymentTime - fixingTime;
-		final RandomVariable libor              = simulation.getLIBOR(fixingTime, fixingTime, paymentTime);
-		final RandomVariable numeraire           = simulation.getNumeraire(paymentTime);
-		final RandomVariable numeraireAtTimeZero = simulation.getNumeraire(0.0);
-
-		return libor.sub(strike).mult(periodLength)
-				.div(numeraire).mult(numeraireAtTimeZero)
-				.getAverage();
-	}
-
-	/**
-	 * Prices a Caplet (call on a LIBOR rate) at time 0.
-	 *
-	 * <p>
-	 * The Caplet pays \( \max(L(T_s,T_e) - K,\,0) \cdot \delta \) at \( T_e \).
-	 * Its value at time 0 is:
-	 * \[
-	 *   V_0 = \mathrm{E}\!\left[\frac{N(0)}{N(T_e)} \cdot \max(L(T_s,T_e;\,T_s) - K,\,0) \cdot \delta\right]
-	 * \]
-	 *
-	 * @param simulation  The Monte Carlo simulation.
-	 * @param fixingTime  \( T_s \) — the LIBOR fixing date.
-	 * @param paymentTime \( T_e \) — the payment date.
-	 * @param strike      \( K \) — the cap strike.
-	 * @return Monte Carlo estimate of the Caplet value.
-	 */
-	private double capletValue(
-			final TermStructureMonteCarloSimulationModel simulation,
-			final double fixingTime,
-			final double paymentTime,
-			final double strike) throws CalculationException {
-
-		final double periodLength = paymentTime - fixingTime;
-		final RandomVariable libor              = simulation.getLIBOR(fixingTime, fixingTime, paymentTime);
-		final RandomVariable numeraire           = simulation.getNumeraire(paymentTime);
-		final RandomVariable numeraireAtTimeZero = simulation.getNumeraire(0.0);
-
-		return libor.sub(strike).floor(0.0).mult(periodLength)
-				.div(numeraire).mult(numeraireAtTimeZero)
-				.getAverage();
-	}
 
 	// -------------------------------------------------------------------------
 	// Model construction helpers
@@ -510,7 +346,7 @@ public class LIBORMarketModelPluginTest {
 	 * @param stateSpaceName {@code "NORMAL"} or {@code "LOGNORMAL"}.
 	 * @param seed           Random seed for the Brownian motion.
 	 */
-	private TermStructureMonteCarloSimulationModel buildOldSimulation(
+	private LIBORMonteCarloSimulationFromLIBORModel buildOldSimulation(
 			final String measureName, final String stateSpaceName, final int seed) throws CalculationException {
 
 		final var timeDiscretization  = new TimeDiscretizationFromArray(0.0, (int)(TIME_HORIZON / PERIOD_LENGTH), PERIOD_LENGTH);
@@ -521,11 +357,14 @@ public class LIBORMarketModelPluginTest {
 				new double[]{ 0.5, TIME_HORIZON },
 				new double[]{ FLAT_FORWARD_RATE, FLAT_FORWARD_RATE },
 				PERIOD_LENGTH);
+        
+        // rescale volatility for different cases        
+        final double volatilityParameterA = stateSpaceName.equalsIgnoreCase("NORMAL") ? FLAT_FORWARD_RATE * VOLATILITY_PARAMETER_A : VOLATILITY_PARAMETER_A;
+        final var volatilityModel  = new LIBORVolatilityModelFourParameterExponentialForm(
+                timeDiscretization, tenorDiscretization,
+                volatilityParameterA, VOLATILITY_PARAMETER_B,
+                VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, false);
 
-		final var volatilityModel  = new LIBORVolatilityModelFourParameterExponentialForm(
-				timeDiscretization, tenorDiscretization,
-				VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B,
-				VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, false);
 		final var correlationModel = new LIBORCorrelationModelExponentialDecay(
 				timeDiscretization, tenorDiscretization, NUMBER_OF_FACTORS, CORRELATION_DECAY);
 		final var covarianceModel  = new LIBORCovarianceModelFromVolatilityAndCorrelation(
@@ -547,29 +386,6 @@ public class LIBORMarketModelPluginTest {
 	}
 
 	/**
-	 * Builds a simulation using the original {@link LIBORMarketModelFromCovarianceModel}
-	 * with {@code StateSpace.NORMAL} (default).
-	 *
-	 * @param measureName {@code "SPOT"} or {@code "TERMINAL"}.
-	 * @param seed        Random seed for the Brownian motion.
-	 */
-	private TermStructureMonteCarloSimulationModel buildOldSimulation(
-			final String measureName, final int seed) throws CalculationException {
-		return buildOldSimulation(measureName, LIBORMarketModelFromCovarianceModel.StateSpace.NORMAL.name(), seed);
-	}
-
-	/**
-	 * Builds a simulation using our new {@link AugmentedLIBORMarketModel}.
-	 *
-	 * @param measure             The plug-in measure to inject.
-	 * @param seed                Random seed for the Brownian motion.
-	 */
-	private TermStructureMonteCarloSimulationModel buildNewSimulation(
-			final Measure measure, final int seed) throws CalculationException {
-		return buildNewSimulation(measure, new NormalStateSpaceTransform(), seed);
-	}
-
-	/**
 	 * Builds a simulation using our new {@link AugmentedLIBORMarketModel}
 	 * with an explicit state-space transform.
 	 *
@@ -577,7 +393,7 @@ public class LIBORMarketModelPluginTest {
 	 * @param stateSpaceTransform The plug-in state-space transform to inject.
 	 * @param seed                Random seed for the Brownian motion.
 	 */
-	private TermStructureMonteCarloSimulationModel buildNewSimulation(
+	private LIBORMonteCarloSimulationFromLIBORModel buildNewSimulation(
 			final Measure measure, final StateSpaceTransform stateSpaceTransform, final int seed) throws CalculationException {
 
 		final var timeDiscretization  = new TimeDiscretizationFromArray(0.0, (int)(TIME_HORIZON / PERIOD_LENGTH), PERIOD_LENGTH);
@@ -589,10 +405,12 @@ public class LIBORMarketModelPluginTest {
 				new double[]{ FLAT_FORWARD_RATE, FLAT_FORWARD_RATE },
 				PERIOD_LENGTH);
 
-		final var volatilityModel  = new LIBORVolatilityModelFourParameterExponentialForm(
-				timeDiscretization, tenorDiscretization,
-				VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B,
-				VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, false);
+        // rescale volatility for different cases        
+        final double volatilityParameterA = stateSpaceTransform.getClass().getSimpleName().equalsIgnoreCase("NormalStateSpaceTransform") ? FLAT_FORWARD_RATE * VOLATILITY_PARAMETER_A : VOLATILITY_PARAMETER_A;
+        final var volatilityModel  = new LIBORVolatilityModelFourParameterExponentialForm(
+                timeDiscretization, tenorDiscretization,
+                volatilityParameterA, VOLATILITY_PARAMETER_B,
+                VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, false);
 		final var correlationModel = new LIBORCorrelationModelExponentialDecay(
 				timeDiscretization, tenorDiscretization, NUMBER_OF_FACTORS, CORRELATION_DECAY);
 		final var covarianceModel  = new LIBORCovarianceModelFromVolatilityAndCorrelation(
@@ -608,4 +426,57 @@ public class LIBORMarketModelPluginTest {
 
 		return new LIBORMonteCarloSimulationFromLIBORModel(process);
 	}
+
+	// -------------------------------------------------------------------------
+	// Product pricing helpers
+	// -------------------------------------------------------------------------
+
+	private double getAnalyticCapletValue(
+		final String stateSpaceName,
+		final double forwardRate,
+		final double strike,
+		final int LIBORIndex,
+		final double volatilityParameterA,
+        final double volatilityParameterB,
+        final double volatilityParameterC,
+        final double volatilityParameterD,
+        final double notional
+    ) {
+
+        final double fixingTime = LIBORIndex * PERIOD_LENGTH;
+        final double paymentTime = (LIBORIndex + 1) * PERIOD_LENGTH;
+        final double volatility = getIntegratedVolatility(LIBORIndex, LIBORIndex, volatilityParameterA, volatilityParameterB, volatilityParameterC, volatilityParameterD);
+        final double payoffUnit = PERIOD_LENGTH * 1/Math.pow(1+FLAT_FORWARD_RATE*PERIOD_LENGTH, paymentTime/PERIOD_LENGTH);
+
+        if (stateSpaceName.equalsIgnoreCase("LOGNORMAL")) {
+			return AnalyticFormulas.blackModelCapletValue(forwardRate, volatility, fixingTime, strike, PERIOD_LENGTH, payoffUnit) * notional;
+		}
+		if (stateSpaceName.equalsIgnoreCase("NORMAL")) {
+			return AnalyticFormulas.bachelierOptionValue(forwardRate, volatility, fixingTime, strike, payoffUnit) * notional;
+		}
+		else {
+			throw new IllegalArgumentException("Unknown state space: " + stateSpaceName);
+		}
+	}
+
+    private double getIntegratedVolatility(
+        final int LIBORIndex,
+        final int timeIndex,
+        final double volatilityParameterA,
+        final double volatilityParameterB,
+        final double volatilityParameterC,
+        final double volatilityParameterD) {
+
+        // See the documentation of LIBORVolatilityModelFourParameterExponentialForm for the formula of the integrated variance 
+        double maturity = LIBORIndex * PERIOD_LENGTH;
+        double variance = 0;
+        for (int i = 0; i < timeIndex; i++) {
+            double t = i * PERIOD_LENGTH;
+            double tau = maturity - t;
+            double sigma = (volatilityParameterA + volatilityParameterB * tau) * Math.exp(-volatilityParameterC * tau) + volatilityParameterD;
+            variance += sigma * sigma * PERIOD_LENGTH;
+        }
+        variance /= timeIndex * PERIOD_LENGTH; // average variance per unit time
+        return Math.sqrt(variance);
+        }
 }
