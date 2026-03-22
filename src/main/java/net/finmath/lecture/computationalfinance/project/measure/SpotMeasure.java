@@ -38,7 +38,8 @@ public class SpotMeasure implements Measure {
 	 * <p>
 	 * For the spot measure the drift of component \( j \) accumulates contributions
 	 * from all live rates \( l \leq j \) using a running sum of factor loadings,
-	 * iterating upward from {@code firstForwardRateIndex} to \( n-1 \).
+	 * iterating upward from {@code firstForwardRateIndex} to \( n-1 \),
+	 * where \( n \) is the total number of forward rate components.
 	 */
 	@Override
 	public RandomVariable[] getDrift(
