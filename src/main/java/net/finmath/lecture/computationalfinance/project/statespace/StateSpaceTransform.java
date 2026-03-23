@@ -40,10 +40,10 @@ public interface StateSpaceTransform {
 	 * for normal state space, \( X_0 = L_0 \).
 	 *
 	 * @param rate The initial forward rate \( L_0 \) from the market curve.
-	 * @param LIBORIndex The index of the LIBOR rate.
+	 * @param liborIndex The index of the LIBOR rate.
 	 * @return The corresponding initial internal state \( X_0 \).
 	 */
-	double getInitialState(double rate, int LIBORIndex);
+	double getInitialState(double rate, int liborIndex);
 
 	/**
 	 * Transforms an internal state \( X \) to the corresponding LIBOR rate \( L = f(X) \).
@@ -54,10 +54,10 @@ public interface StateSpaceTransform {
 	 * exponential function; for normal state space this is the identity.
 	 *
 	 * @param internalState The simulated internal state \( X \).
-	 * @param LIBORIndex The index of the LIBOR rate.
+	 * @param liborIndex The index of the LIBOR rate.
 	 * @return The LIBOR rate \( L = f(X) \).
 	 */
-	RandomVariable applyTransform(RandomVariable internalState, int LIBORIndex);
+	RandomVariable applyTransform(RandomVariable internalState, int liborIndex);
 
 	/**
 	 * Inverse transform: maps a LIBOR rate \( L \) back to the internal state \( X = f^{-1}(L) \).
@@ -69,10 +69,10 @@ public interface StateSpaceTransform {
 	 * for normal state space this is the identity.
 	 *
 	 * @param rate The LIBOR rate \( L \).
-	 * @param LIBORIndex The index of the LIBOR rate.
+	 * @param liborIndex The index of the LIBOR rate.
 	 * @return The internal state \( X = f^{-1}(L) \).
 	 */
-	RandomVariable applyInverseTransform(RandomVariable rate, int LIBORIndex);
+	RandomVariable applyInverseTransform(RandomVariable rate, int liborIndex);
 
 	/**
 	 * Returns the drift weight factor for the measure drift formula.
@@ -92,10 +92,10 @@ public interface StateSpaceTransform {
 	 * </ul>
 	 *
 	 * @param liborRate The current LIBOR rate \( L_j \).
-	 * @param LIBORIndex The index \( j \) of the LIBOR rate.
+	 * @param liborIndex The index \( j \) of the LIBOR rate.
 	 * @return \( g_j(L_j) \): the rate itself for log-normal, or a scalar 1.0 for normal.
 	 */
-	RandomVariable getDriftWeightFactor(RandomVariable liborRate, int LIBORIndex);
+	RandomVariable getDriftWeightFactor(RandomVariable liborRate, int liborIndex);
 
 	/**
 	 * Returns the Itô correction term to be added to the drift of component \( j \).
@@ -103,9 +103,9 @@ public interface StateSpaceTransform {
 	 * @param varianceAtTimeIndex The instantaneous variance \( \sigma_j^2 = \text{Cov}(j,j) \)
 	 *                 of the \( j \)-th component at the current time step.
 	 * @param liborAtTimeIndex The LIBOR rate \( L_j \) at the current time step.
-	 * @param LIBORIndex The index \( j \) of the LIBOR rate.
+	 * @param liborIndex The index \( j \) of the LIBOR rate.
 	 * @return The Itô correction \( -\tfrac{1}{2}\sigma_j^2 \) (log-normal)
 	 *         or zero (normal) as a {@link RandomVariable}.
 	 */
-	RandomVariable getItoCorrection(RandomVariable varianceAtTimeIndex, RandomVariable liborAtTimeIndex	, int LIBORIndex);
+	RandomVariable getItoCorrection(RandomVariable varianceAtTimeIndex, RandomVariable liborAtTimeIndex	, int liborIndex);
 }
