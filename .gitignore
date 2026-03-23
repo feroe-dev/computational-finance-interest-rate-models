@@ -2,3 +2,7 @@
 /.settings/
 .classpath
 .project
+
+/Plans/
+*.pdf
+.DS_Store
