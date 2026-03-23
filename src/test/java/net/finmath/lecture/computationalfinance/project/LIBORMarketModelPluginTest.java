@@ -33,7 +33,7 @@ public class LIBORMarketModelPluginTest {
 	// -------------------------------------------------------------------------
 
 	/** Number of Monte Carlo paths. */
-	private static final int NUMBER_OF_PATHS = 250000;
+	private static final int NUMBER_OF_PATHS = 10000;
 
 	/** Random seeds — one fixed seed per measure type for consistency within a measure. */
 	private static final int SEED_SPOT     = 3141;

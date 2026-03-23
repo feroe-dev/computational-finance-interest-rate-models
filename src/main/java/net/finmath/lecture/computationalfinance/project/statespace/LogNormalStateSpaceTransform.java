@@ -28,27 +28,27 @@ import net.finmath.stochastic.RandomVariable;
 public class LogNormalStateSpaceTransform implements StateSpaceTransform {
 
 	@Override
-	public double getInitialState(final double rate) {
+	public double getInitialState(final double rate, final int LIBORIndex) {
 		return Math.log(Math.max(rate, 0));
 	}
 
 	@Override
-	public RandomVariable applyTransform(final RandomVariable internalState) {
+	public RandomVariable applyTransform(final RandomVariable internalState, final int LIBORIndex) {
 		return internalState.exp();
 	}
 
 	@Override
-	public RandomVariable applyInverseTransform(final RandomVariable rate) {
+	public RandomVariable applyInverseTransform(final RandomVariable rate, final int LIBORIndex) {
 		return rate.log();
 	}
 
 	@Override
-	public RandomVariable getDriftWeightFactor(final RandomVariable liborRate) {
+	public RandomVariable getDriftWeightFactor(final RandomVariable liborRate, final int LIBORIndex) {
 		return liborRate;
 	}
 
 	@Override
-	public RandomVariable getItoCorrection(final RandomVariable variance) {
+	public RandomVariable getItoCorrection(final RandomVariable variance, final RandomVariable liborRate, final int LIBORIndex) {
 		return variance.mult(-0.5);
 	}
 }

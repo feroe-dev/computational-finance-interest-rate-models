@@ -74,7 +74,7 @@ public class TerminalMeasure implements Measure {
 			// Measure transform weight: -δ_j * g(L_j) / (1 + δ_j · L_j)  — negative sign for terminal measure
 			// g(L) = 1 for normal, g(L) = L for log-normal — provided by the state-space plug-in.
 			RandomVariable oneStepMeasureTransform = Scalar.of(-periodLength).discount(forwardRate, periodLength)
-					.mult(stateSpaceTransform.getDriftWeightFactor(forwardRate));
+					.mult(stateSpaceTransform.getDriftWeightFactor(forwardRate, j));
 
 			final RandomVariable[] factorLoading = model.getFactorLoading(process, timeIndex, j, realizationAtTimeIndex);
 

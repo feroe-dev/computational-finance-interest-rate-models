@@ -152,7 +152,7 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 		final double[] liborInitialStates = new double[liborPeriodDiscretization.getNumberOfTimeSteps()];
 		for(int i = 0; i < liborPeriodDiscretization.getNumberOfTimeSteps(); i++) {
 			final double rate = forwardRateCurve.getForward(curveModel, liborPeriodDiscretization.getTime(i), liborPeriodDiscretization.getTimeStep(i));
-			liborInitialStates[i] = stateSpaceTransform.getInitialState(rate);
+			liborInitialStates[i] = stateSpaceTransform.getInitialState(rate, i);
 		}
 		final RandomVariable[] initialState = new RandomVariable[getNumberOfComponents()];
 		for(int i = 0; i < getNumberOfComponents(); i++) {
@@ -163,7 +163,7 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 
 	@Override
 	public RandomVariable applyStateSpaceTransform(final MonteCarloProcess process, final int timeIndex, final int componentIndex, final RandomVariable randomVariable) {
-		RandomVariable value = stateSpaceTransform.applyTransform(randomVariable);
+		RandomVariable value = stateSpaceTransform.applyTransform(randomVariable, componentIndex);
 		if(!Double.isInfinite(liborCap)) {
 			value = value.cap(liborCap);
 		}
@@ -172,7 +172,7 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 
 	@Override
 	public RandomVariable applyStateSpaceTransformInverse(final MonteCarloProcess process, final int timeIndex, final int componentIndex, final RandomVariable randomVariable) {
-		return stateSpaceTransform.applyInverseTransform(randomVariable);
+		return stateSpaceTransform.applyInverseTransform(randomVariable, componentIndex);
 	}
 
 	@Override
@@ -211,7 +211,8 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 		// Itô correction — delegated to the state-space transform plug-in
 		for(int j = firstForwardRateIndex; j < getNumberOfComponents(); j++) {
 			final RandomVariable variance = covarianceModel.getCovariance(time, j, j, realizationAtTimeIndex);
-			drift[j] = drift[j].add(stateSpaceTransform.getItoCorrection(variance));
+			final RandomVariable liborAtTimeIndex = realizationAtTimeIndex[j];
+			drift[j] = drift[j].add(stateSpaceTransform.getItoCorrection(variance, liborAtTimeIndex, j));
 		}
 
 		return drift;
