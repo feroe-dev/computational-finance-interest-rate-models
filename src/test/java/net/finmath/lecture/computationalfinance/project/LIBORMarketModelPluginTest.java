@@ -11,6 +11,7 @@ import net.finmath.lecture.computationalfinance.project.measure.ForwardMeasure;
 import net.finmath.lecture.computationalfinance.project.measure.Measure;
 import net.finmath.lecture.computationalfinance.project.measure.SpotMeasure;
 import net.finmath.lecture.computationalfinance.project.measure.TerminalMeasure;
+import net.finmath.lecture.computationalfinance.project.statespace.DisplacedLogNormalStateSpaceTransform;
 import net.finmath.lecture.computationalfinance.project.statespace.LogNormalStateSpaceTransform;
 import net.finmath.lecture.computationalfinance.project.statespace.NormalStateSpaceTransform;
 import net.finmath.lecture.computationalfinance.project.statespace.StateSpaceTransform;
@@ -33,7 +34,7 @@ public class LIBORMarketModelPluginTest {
 	// -------------------------------------------------------------------------
 
 	/** Number of Monte Carlo paths. */
-	private static final int NUMBER_OF_PATHS = 50000;
+	private static final int NUMBER_OF_PATHS = 200000;
 
 	/** Random seeds — one fixed seed per measure type for consistency within a measure. */
 	private static final int SEED_SPOT     = 3141;
@@ -362,6 +363,83 @@ public class LIBORMarketModelPluginTest {
 
     }
 
+    // =========================================================================
+    // Test 4 — Plug-in consistency for log-normal state space transform
+    // =========================================================================
+    @Test
+    public void testDisplacedLognormalStateSpaceTransform() throws CalculationException {
+        final double fixingTime  = 4.5;
+        final double paymentTime = 5.0;
+        final double notional = 10000.0;
+        final double strikeITM = 0.01;
+        final double strikeOTM = 0.05;
+
+        final int fixingTimeIndex = (int) (fixingTime / PERIOD_LENGTH);
+        final int numberOfPeriods = (int) (TIME_HORIZON / PERIOD_LENGTH);
+
+        final Caplet capletITM = new Caplet(fixingTime, paymentTime-fixingTime, strikeITM);
+        final Caplet capletATM = new Caplet(fixingTime, paymentTime-fixingTime, FLAT_FORWARD_RATE);
+        final Caplet capletOTM = new Caplet(fixingTime, paymentTime-fixingTime, strikeOTM);
+
+        // ----- Section 4: Displaced log-normal state space transform
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginSpotDisplacedLognormal       = buildNewSimulation(new SpotMeasure(), new DisplacedLogNormalStateSpaceTransform(0.01, numberOfPeriods), SEED_SPOT);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginTerminalDisplacedLognormal   = buildNewSimulation(new TerminalMeasure(), new DisplacedLogNormalStateSpaceTransform(0.01, numberOfPeriods), SEED_TERMINAL);
+
+
+        final double ITMpluginSpotDisplacedLognormal        = capletITM.getValue(simulationPluginSpotDisplacedLognormal) * notional;
+        final double ATMpluginSpotDisplacedLognormal        = capletATM.getValue(simulationPluginSpotDisplacedLognormal) * notional;
+        final double OTMpluginSpotDisplacedLognormal        = capletOTM.getValue(simulationPluginSpotDisplacedLognormal) * notional;
+
+        final double ITMpluginTerminalDisplacedLognormal    = capletITM.getValue(simulationPluginTerminalDisplacedLognormal) * notional;
+        final double ATMpluginTerminalDisplacedLognormal    = capletATM.getValue(simulationPluginTerminalDisplacedLognormal) * notional;
+        final double OTMpluginTerminalDisplacedLognormal    = capletOTM.getValue(simulationPluginTerminalDisplacedLognormal) * notional;
+
+        // get analytic values for comparison
+        final double ITMtheoreticalDisplacedLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE + 0.01, strikeITM + 0.01, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double ATMtheoreticalDisplacedLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE + 0.01, FLAT_FORWARD_RATE + 0.01, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double OTMtheoreticalDisplacedLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE + 0.01, strikeOTM + 0.01, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+
+        System.out.println("=".repeat(80));
+        System.out.println("  Displaced Lognormal State Space Transform");
+        System.out.println("  Numerical Valuation of a caplet | Fixing = 4.5 yr, Payment = 5.0 yr | Flat initial forward curve at 3 %");
+        System.out.println("=".repeat(80));
+        System.out.println("");
+
+        System.out.println("--- ITM Caplet (strike = 1 %) | Theoretical value: " + ITMtheoreticalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %12s%n", "Measure", "Numerical");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %+12.6f%n", "Spot",     ITMpluginSpotDisplacedLognormal);
+        System.out.printf("  %-18s %+12.6f%n", "Terminal", ITMpluginTerminalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");    
+
+        System.out.println("--- ATM Caplet (strike = 3 %) | Theoretical value: " + ATMtheoreticalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %12s%n", "Measure", "Numerical");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %+12.6f%n", "Spot",     ATMpluginSpotDisplacedLognormal);    
+        System.out.printf("  %-18s %+12.6f%n", "Terminal", ATMpluginTerminalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");
+
+        System.out.println("--- OTM Caplet (strike = 5 %) | Theoretical value: " + OTMtheoreticalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %12s%n", "Measure", "Numerical");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %+12.6f%n", "Spot",     OTMpluginSpotDisplacedLognormal);    
+        System.out.printf("  %-18s %+12.6f%n", "Terminal", OTMpluginTerminalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");
+
+        Assertions.assertEquals(ITMpluginSpotDisplacedLognormal, ITMtheoreticalDisplacedLognormal, 1e-0, "ITM caplet consistency: Spot under displaced log-normal");
+        Assertions.assertEquals(ITMpluginTerminalDisplacedLognormal, ITMtheoreticalDisplacedLognormal, 1e-0, "ITM caplet consistency: Terminal under displaced log-normal");
+        Assertions.assertEquals(ATMpluginSpotDisplacedLognormal, ATMtheoreticalDisplacedLognormal, 1e-0, "ATM caplet consistency: Spot under displaced log-normal");
+        Assertions.assertEquals(ATMpluginTerminalDisplacedLognormal, ATMtheoreticalDisplacedLognormal, 1e-0, "ATM caplet consistency: Terminal under displaced log-normal");
+        Assertions.assertEquals(OTMpluginSpotDisplacedLognormal, OTMtheoreticalDisplacedLognormal, 1e-0, "OTM caplet consistency: Spot under displaced log-normal");
+        Assertions.assertEquals(OTMpluginTerminalDisplacedLognormal, OTMtheoreticalDisplacedLognormal, 1e-0, "OTM caplet consistency: Terminal under displaced log-normal");
+    }
+
 
 	// -------------------------------------------------------------------------
 	// Model construction helpers
@@ -478,7 +556,7 @@ public class LIBORMarketModelPluginTest {
         final double payoffUnit = PERIOD_LENGTH * 1.0 /Math.pow(1+FLAT_FORWARD_RATE*PERIOD_LENGTH, paymentTime/PERIOD_LENGTH);
 
         if (stateSpaceName.equalsIgnoreCase("LOGNORMAL")) {
-			return AnalyticFormulas.blackModelCapletValue(forwardRate, volatility, fixingTime, strike, PERIOD_LENGTH, payoffUnit) * notional;
+			return AnalyticFormulas.blackScholesGeneralizedOptionValue(forwardRate, volatility, fixingTime, strike, payoffUnit) * notional;
 		}
 		if (stateSpaceName.equalsIgnoreCase("NORMAL")) {
 			return AnalyticFormulas.bachelierOptionValue(forwardRate, volatility, fixingTime, strike, payoffUnit) * notional;
