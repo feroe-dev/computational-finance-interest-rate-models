@@ -360,7 +360,6 @@ public class LIBORMarketModelPluginTest {
         System.out.printf("%-18s  %+12.6f  %+12.6f  %+12.6f  %+12.6f%n", "Lognormal", OTMforward6Lognormal, OTMforward10Lognormal, OTMforward14Lognormal, OTMforward18Lognormal);
         System.out.println("-".repeat(70));
         System.out.println("");
-
     }
 
     // =========================================================================
@@ -438,6 +437,71 @@ public class LIBORMarketModelPluginTest {
         Assertions.assertEquals(ATMpluginTerminalDisplacedLognormal, ATMtheoreticalDisplacedLognormal, 1e-0, "ATM caplet consistency: Terminal under displaced log-normal");
         Assertions.assertEquals(OTMpluginSpotDisplacedLognormal, OTMtheoreticalDisplacedLognormal, 1e-0, "OTM caplet consistency: Spot under displaced log-normal");
         Assertions.assertEquals(OTMpluginTerminalDisplacedLognormal, OTMtheoreticalDisplacedLognormal, 1e-0, "OTM caplet consistency: Terminal under displaced log-normal");
+
+        // Section 5: Compare displaced log-normal state space transform with displacement = 0 with log-normal state space transforms
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginSpotLognormal       = buildNewSimulation(new SpotMeasure(), new LogNormalStateSpaceTransform(), SEED_SPOT);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginTerminalLognormal   = buildNewSimulation(new TerminalMeasure(), new LogNormalStateSpaceTransform(), SEED_TERMINAL);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginSpotDisplacedLognormalZero       = buildNewSimulation(new SpotMeasure(), new DisplacedLogNormalStateSpaceTransform(0.0, numberOfPeriods), SEED_SPOT);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginTerminalDisplacedLognormalZero   = buildNewSimulation(new TerminalMeasure(), new DisplacedLogNormalStateSpaceTransform(0.0, numberOfPeriods), SEED_TERMINAL);
+
+        final double ITMpluginSpotLognormal        = capletITM.getValue(simulationPluginSpotLognormal) * notional;
+        final double ATMpluginSpotLognormal        = capletATM.getValue(simulationPluginSpotLognormal) * notional;
+        final double OTMpluginSpotLognormal        = capletOTM.getValue(simulationPluginSpotLognormal) * notional;
+        
+        final double ITMpluginTerminalLognormal    = capletITM.getValue(simulationPluginTerminalLognormal) * notional;
+        final double ATMpluginTerminalLognormal    = capletATM.getValue(simulationPluginTerminalLognormal) * notional;
+        final double OTMpluginTerminalLognormal    = capletOTM.getValue(simulationPluginTerminalLognormal) * notional;
+
+        final double ITMpluginSpotDisplacedLognormalZero        = capletITM.getValue(simulationPluginSpotDisplacedLognormalZero) * notional;
+        final double ATMpluginSpotDisplacedLognormalZero        = capletATM.getValue(simulationPluginSpotDisplacedLognormalZero) * notional;
+        final double OTMpluginSpotDisplacedLognormalZero        = capletOTM.getValue(simulationPluginSpotDisplacedLognormalZero) * notional;
+
+        final double ITMpluginTerminalDisplacedLognormalZero    = capletITM.getValue(simulationPluginTerminalDisplacedLognormalZero) * notional;
+        final double ATMpluginTerminalDisplacedLognormalZero    = capletATM.getValue(simulationPluginTerminalDisplacedLognormalZero) * notional;
+        final double OTMpluginTerminalDisplacedLognormalZero    = capletOTM.getValue(simulationPluginTerminalDisplacedLognormalZero) * notional;
+
+        // get analytic values for comparison
+        final double ITMtheoreticalLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, strikeITM, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double ATMtheoreticalLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, FLAT_FORWARD_RATE, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double OTMtheoreticalLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, strikeOTM, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+
+        System.out.println("=".repeat(80));
+        System.out.println("  Displaced Lognormal State Space Transform with zero displacement vs. Lognormal State Space Transform");
+        System.out.println("  Numerical Valuation of a caplet | Fixing = 4.5 yr, Payment = 5.0 yr | Flat initial forward curve at 3 %");
+        System.out.println("=".repeat(80));
+        System.out.println(""); 
+        System.out.println("--- ITM Caplet (strike = 1 %) | Theoretical value: " + ITMtheoreticalLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "State Space", "Lognormal", "Displaced Lognormal (d=0)", "Abs. Difference");
+        System.out.println("  ");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Spot",     ITMpluginSpotLognormal, ITMpluginSpotDisplacedLognormalZero, Math.abs(ITMpluginSpotLognormal - ITMpluginSpotDisplacedLognormalZero));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Terminal", ITMpluginTerminalLognormal, ITMpluginTerminalDisplacedLognormalZero, Math.abs(ITMpluginTerminalLognormal - ITMpluginTerminalDisplacedLognormalZero));
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");
+        System.out.println("--- ATM Caplet (strike = 3 %) | Theoretical value: " + ATMtheoreticalLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "State Space", "Lognormal", "Displaced Lognormal (d=0)", "Abs. Difference");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Spot",     ATMpluginSpotLognormal, ATMpluginSpotDisplacedLognormalZero, Math.abs(ATMpluginSpotLognormal - ATMpluginSpotDisplacedLognormalZero));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Terminal", ATMpluginTerminalLognormal, ATMpluginTerminalDisplacedLognormalZero, Math.abs(ATMpluginTerminalLognormal - ATMpluginTerminalDisplacedLognormalZero));
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");
+        System.out.println("--- OTM Caplet (strike = 5 %) | Theoretical value: " + OTMtheoreticalLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "State Space", "Lognormal", "Displaced Lognormal (d=0)", "Abs. Difference");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Spot",     OTMpluginSpotLognormal, OTMpluginSpotDisplacedLognormalZero, Math.abs(OTMpluginSpotLognormal - OTMpluginSpotDisplacedLognormalZero));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Terminal", OTMpluginTerminalLognormal, OTMpluginTerminalDisplacedLognormalZero, Math.abs(OTMpluginTerminalLognormal - OTMpluginTerminalDisplacedLognormalZero));
+        System.out.println("  " + "-".repeat(70));
+        System.out.println(""); 
+
+        Assertions.assertEquals(ITMpluginSpotLognormal, ITMpluginSpotDisplacedLognormalZero, 1e-10, "ITM caplet consistency: Spot under log-normal vs. displaced log-normal with zero displacement");
+        Assertions.assertEquals(ITMpluginTerminalLognormal, ITMpluginTerminalDisplacedLognormalZero, 1e-10, "ITM caplet consistency: Terminal under log-normal vs. displaced log-normal with zero displacement");
+        Assertions.assertEquals(ATMpluginSpotLognormal, ATMpluginSpotDisplacedLognormalZero, 1e-10, "ATM caplet consistency: Spot under log-normal vs. displaced log-normal with zero displacement");
+        Assertions.assertEquals(ATMpluginTerminalLognormal, ATMpluginTerminalDisplacedLognormalZero, 1e-10, "ATM caplet consistency: Terminal under log-normal vs. displaced log-normal with zero displacement");
+        Assertions.assertEquals(OTMpluginSpotLognormal, OTMpluginSpotDisplacedLognormalZero, 1e-10, "OTM caplet consistency: Spot under log-normal vs. displaced log-normal with zero displacement");
+        Assertions.assertEquals(OTMpluginTerminalLognormal, OTMpluginTerminalDisplacedLognormalZero, 1e-10, "OTM caplet consistency: Terminal under log-normal vs. displaced log-normal with zero displacement");
     }
 
 
