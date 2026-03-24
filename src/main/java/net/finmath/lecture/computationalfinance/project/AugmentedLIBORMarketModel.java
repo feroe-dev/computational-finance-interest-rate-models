@@ -234,7 +234,7 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 			final MonteCarloProcess process,
 			final int timeIndex,
 			final int componentIndex,
-			final RandomVariable[] realizationAtTimeIndex) {
+			final RandomVariable[] realizationAtTimeIndex) {				
 		return covarianceModel.getFactorLoading(process.getTime(timeIndex), getLiborPeriod(componentIndex), realizationAtTimeIndex);
 	}
 

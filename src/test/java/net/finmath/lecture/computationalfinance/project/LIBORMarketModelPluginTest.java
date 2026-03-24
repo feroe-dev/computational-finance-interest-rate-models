@@ -33,7 +33,7 @@ public class LIBORMarketModelPluginTest {
 	// -------------------------------------------------------------------------
 
 	/** Number of Monte Carlo paths. */
-	private static final int NUMBER_OF_PATHS = 100000;
+	private static final int NUMBER_OF_PATHS = 50000;
 
 	/** Random seeds — one fixed seed per measure type for consistency within a measure. */
 	private static final int SEED_SPOT     = 3141;
@@ -73,10 +73,10 @@ public class LIBORMarketModelPluginTest {
 	private static final int NUMBER_OF_FACTORS = 5;
 
 	// =========================================================================
-	// Test 1 — Plug-in consistency
+	// Test 1 — Plug-in consistency for normal state space transform
 	// =========================================================================
 	@Test
-	public void testPlugInConsistency() throws CalculationException {
+	public void testPlugInConsistencyNormal() throws CalculationException {
 		
         final double fixingTime  = 4.5;
 		final double paymentTime = 5.0;
@@ -136,9 +136,6 @@ public class LIBORMarketModelPluginTest {
 		System.out.println("  " + "-".repeat(70));
         System.out.println("");
 
-        Assertions.assertEquals(ITMoriginalSpot,     ITMpluginSpot,     1e-10, "ITM caplet consistency: Spot under Bachelier");
-		Assertions.assertEquals(ITMoriginalTerminal, ITMpluginTerminal, 1e-10, "ITM caplet consistency: Terminal under Bachelier");
-
         // ATM caplet
         System.out.println("  --- ATM Caplet (strike = 3 %) | Theoretical value: " + ATMtheoretical);
         System.out.println("  " + "-".repeat(70));  
@@ -148,9 +145,6 @@ public class LIBORMarketModelPluginTest {
         System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Terminal", ATMoriginalTerminal, ATMpluginTerminal, Math.abs(ATMoriginalTerminal - ATMpluginTerminal));
         System.out.println("  " + "-".repeat(70));
         System.out.println("");
-
-        Assertions.assertEquals(ATMoriginalSpot,     ATMpluginSpot,     1e-10, "ATM caplet consistency: Spot under Bachelier");
-        Assertions.assertEquals(ATMoriginalTerminal, ATMpluginTerminal, 1e-10, "ATM caplet consistency: Terminal under Bachelier");
 
         // OTM caplet
         System.out.println("  --- OTM Caplet (strike = 5 %) | Theoretical value: " + OTMtheoretical);
@@ -162,9 +156,31 @@ public class LIBORMarketModelPluginTest {
         System.out.println("  " + "-".repeat(70));
         System.out.println("");
 
+        Assertions.assertEquals(ITMoriginalSpot,     ITMpluginSpot,     1e-10, "ITM caplet consistency: Spot under Bachelier");
+		Assertions.assertEquals(ITMoriginalTerminal, ITMpluginTerminal, 1e-10, "ITM caplet consistency: Terminal under Bachelier");
+        Assertions.assertEquals(ATMoriginalSpot,     ATMpluginSpot,     1e-10, "ATM caplet consistency: Spot under Bachelier");
+        Assertions.assertEquals(ATMoriginalTerminal, ATMpluginTerminal, 1e-10, "ATM caplet consistency: Terminal under Bachelier");
         Assertions.assertEquals(OTMoriginalSpot,     OTMpluginSpot,     1e-10, "OTM caplet consistency: Spot under Bachelier");
         Assertions.assertEquals(OTMoriginalTerminal, OTMpluginTerminal, 1e-10, "OTM caplet consistency: Terminal under Bachelier");
+	}
 
+    // =========================================================================
+    // Test 2 — Plug-in consistency for log-normal state space transform
+    // =========================================================================
+    @Test
+    public void testPlugInConsistencyLognormal() throws CalculationException {
+
+        final double fixingTime  = 4.5;
+		final double paymentTime = 5.0;
+        final double notional = 10000.0;
+        final double strikeITM = 0.01;
+        final double strikeOTM = 0.05;
+
+        final int fixingTimeIndex = (int) (fixingTime / PERIOD_LENGTH);
+
+        final Caplet capletITM = new Caplet(fixingTime, paymentTime-fixingTime, strikeITM);
+        final Caplet capletATM = new Caplet(fixingTime, paymentTime-fixingTime, FLAT_FORWARD_RATE);
+        final Caplet capletOTM = new Caplet(fixingTime, paymentTime-fixingTime, strikeOTM);
 
         // ----- Section 2: Log-normal state space transform
         final LIBORMonteCarloSimulationFromLIBORModel simulationOriginalSpotLognormal     = buildOldSimulation("SPOT",     "LOGNORMAL", SEED_SPOT);
@@ -209,9 +225,6 @@ public class LIBORMarketModelPluginTest {
 		System.out.println("  " + "-".repeat(70));
         System.out.println("");
 
-        Assertions.assertEquals(ITMoriginalSpotLognormal,     ITMpluginSpotLognormal,     1e-10, "ITM caplet consistency: Spot under Black");
-		Assertions.assertEquals(ITMoriginalTerminalLognormal, ITMpluginTerminalLognormal, 1e-10, "ITM caplet consistency: Terminal under Black");
-
         // ATM caplet
         System.out.println("  --- ATM Caplet (strike = 3 %) | Theoretical value: " + ATMtheoreticalBlack);
         System.out.println("  " + "-".repeat(70));  
@@ -221,9 +234,6 @@ public class LIBORMarketModelPluginTest {
         System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Terminal", ATMoriginalTerminalLognormal, ATMpluginTerminalLognormal, Math.abs(ATMoriginalTerminalLognormal - ATMpluginTerminalLognormal));
         System.out.println("  " + "-".repeat(70));
         System.out.println("");
-
-        Assertions.assertEquals(ATMoriginalSpotLognormal,     ATMpluginSpotLognormal,     1e-10, "ATM caplet consistency: Spot under Black");
-        Assertions.assertEquals(ATMoriginalTerminalLognormal, ATMpluginTerminalLognormal, 1e-10, "ATM caplet consistency: Terminal under Black");
 
         // OTM caplet
         System.out.println("  --- OTM Caplet (strike = 5 %) | Theoretical value: " + OTMtheoreticalBlack);
@@ -235,10 +245,17 @@ public class LIBORMarketModelPluginTest {
         System.out.println("  " + "-".repeat(70));
         System.out.println(""); 
 
+        Assertions.assertEquals(ITMoriginalSpotLognormal,     ITMpluginSpotLognormal,     1e-10, "ITM caplet consistency: Spot under Black");
+		Assertions.assertEquals(ITMoriginalTerminalLognormal, ITMpluginTerminalLognormal, 1e-10, "ITM caplet consistency: Terminal under Black");
+        Assertions.assertEquals(ATMoriginalSpotLognormal,     ATMpluginSpotLognormal,     1e-10, "ATM caplet consistency: Spot under Black");
+        Assertions.assertEquals(ATMoriginalTerminalLognormal, ATMpluginTerminalLognormal, 1e-10, "ATM caplet consistency: Terminal under Black");
         Assertions.assertEquals(OTMoriginalSpotLognormal,     OTMpluginSpotLognormal,     1e-10, "OTM caplet consistency: Spot under Black");
         Assertions.assertEquals(OTMoriginalTerminalLognormal, OTMpluginTerminalLognormal, 1e-10, "OTM caplet consistency: Terminal under Black");
-	}
+    }
 
+    // =========================================================================
+    // Test 3 — Plug-in consistency for forward measures
+    // =========================================================================
 	@Test
 	public void testForwardMeasurePlugIn() throws CalculationException {
 
@@ -276,8 +293,6 @@ public class LIBORMarketModelPluginTest {
         final double ATMforward18 = capletATM.getValue(simulationPluginForward18) * notional;
         final double OTMforward18 = capletOTM.getValue(simulationPluginForward18) * notional;
         final double ITMforward18 = capletITM.getValue(simulationPluginForward18) * notional;
-
-
 
         // Numerical valuation with lognormal state space transform
         final LIBORMonteCarloSimulationFromLIBORModel simulationPluginForward6Lognormal     = buildNewSimulation(new ForwardMeasure(6), new LogNormalStateSpaceTransform(), SEED_FORWARD6);

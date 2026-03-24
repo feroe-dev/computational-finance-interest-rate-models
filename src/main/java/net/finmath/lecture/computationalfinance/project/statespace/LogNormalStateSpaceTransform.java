@@ -29,7 +29,7 @@ public class LogNormalStateSpaceTransform implements StateSpaceTransform {
 
 	@Override
 	public double getInitialState(final double rate, final int liborIndex) {
-		return Math.log(Math.max(rate, 0));
+		return Math.log(Math.max(rate, 1e-10)); // Avoid log(0)
 	}
 
 	@Override
