@@ -40,9 +40,10 @@ public interface StateSpaceTransform {
 	 * for normal state space, \( X_0 = L_0 \).
 	 *
 	 * @param rate The initial forward rate \( L_0 \) from the market curve.
+	 * @param liborIndex The index of the LIBOR rate.
 	 * @return The corresponding initial internal state \( X_0 \).
 	 */
-	double getInitialState(double rate);
+	double getInitialState(double rate, int liborIndex);
 
 	/**
 	 * Transforms an internal state \( X \) to the corresponding LIBOR rate \( L = f(X) \).
@@ -53,9 +54,10 @@ public interface StateSpaceTransform {
 	 * exponential function; for normal state space this is the identity.
 	 *
 	 * @param internalState The simulated internal state \( X \).
+	 * @param liborIndex The index of the LIBOR rate.
 	 * @return The LIBOR rate \( L = f(X) \).
 	 */
-	RandomVariable applyTransform(RandomVariable internalState);
+	RandomVariable applyTransform(RandomVariable internalState, int liborIndex);
 
 	/**
 	 * Inverse transform: maps a LIBOR rate \( L \) back to the internal state \( X = f^{-1}(L) \).
@@ -67,9 +69,10 @@ public interface StateSpaceTransform {
 	 * for normal state space this is the identity.
 	 *
 	 * @param rate The LIBOR rate \( L \).
+	 * @param liborIndex The index of the LIBOR rate.
 	 * @return The internal state \( X = f^{-1}(L) \).
 	 */
-	RandomVariable applyInverseTransform(RandomVariable rate);
+	RandomVariable applyInverseTransform(RandomVariable rate, int liborIndex);
 
 	/**
 	 * Returns the drift weight factor for the measure drift formula.
@@ -83,32 +86,26 @@ public interface StateSpaceTransform {
 	 * \]
 	 * where the extra factor \( g(L_l) \) depends on the state space:
 	 * <ul>
-	 *   <li><b>Normal:</b> \( g(L) = 1 \) — the rate enters the numerator only once.</li>
-	 *   <li><b>Log-normal:</b> \( g(L) = L \) — an additional \( L_l \) factor appears
-	 *       because the SDE is written in terms of \( \log L \).</li>
+	 *   <li><b>Normal:</b> \( g_j(L_j) = 1 \) — the rate enters the numerator only once.</li>
+	 *   <li><b>Log-normal:</b> \( g_j(L_j) = L_j \) — an additional \( L_j \) factor appears
+	 *       because the SDE is written in terms of \( \log L_j \).</li>
 	 * </ul>
 	 *
 	 * @param liborRate The current LIBOR rate \( L_j \).
-	 * @return \( g(L_j) \): the rate itself for log-normal, or a scalar 1.0 for normal.
+	 * @param liborIndex The index \( j \) of the LIBOR rate.
+	 * @return \( g_j(L_j) \): the rate itself for log-normal, or a scalar 1.0 for normal.
 	 */
-	RandomVariable getDriftWeightFactor(RandomVariable liborRate);
+	RandomVariable getDriftWeightFactor(RandomVariable liborRate, int liborIndex);
 
 	/**
 	 * Returns the Itô correction term to be added to the drift of component \( j \).
 	 *
-	 * <p>
-	 * When the state-space transform is non-linear (e.g. log-normal), Itô's lemma
-	 * introduces a correction to the drift of \( X_j \):
-	 * \[
-	 *   \text{correction}_j = -\tfrac{1}{2}\,\sigma_j^2
-	 * \]
-	 * where \( \sigma_j^2 \) is the instantaneous variance of component \( j \).
-	 * For a linear (normal) transform the correction is zero.
-	 *
-	 * @param variance The instantaneous variance \( \sigma_j^2 = \text{Cov}(j,j) \)
+	 * @param varianceAtTimeIndex The instantaneous variance \( \sigma_j^2 = \text{Cov}(j,j) \)
 	 *                 of the \( j \)-th component at the current time step.
+	 * @param liborAtTimeIndex The LIBOR rate \( L_j \) at the current time step.
+	 * @param liborIndex The index \( j \) of the LIBOR rate.
 	 * @return The Itô correction \( -\tfrac{1}{2}\sigma_j^2 \) (log-normal)
 	 *         or zero (normal) as a {@link RandomVariable}.
 	 */
-	RandomVariable getItoCorrection(RandomVariable variance);
+	RandomVariable getItoCorrection(RandomVariable varianceAtTimeIndex, RandomVariable liborAtTimeIndex	, int liborIndex);
 }

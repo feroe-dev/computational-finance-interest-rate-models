@@ -80,6 +80,9 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 
 	// Numeraire cache — invalidated when the process changes
 	private transient MonteCarloProcess                         numerairesProcess = null;
+	private transient ConcurrentHashMap<Integer, RandomVariable[]> drift            = new ConcurrentHashMap<>();
+	private final transient Object   driftLazyInitLock                     = new Object();
+
 	private transient ConcurrentHashMap<Integer, RandomVariable> numeraires       = new ConcurrentHashMap<>();
 	private transient ConcurrentHashMap<Double, RandomVariable>  numeraireDiscountFactorForwardRates = new ConcurrentHashMap<>();
 	private transient ConcurrentHashMap<Double, RandomVariable>  numeraireDiscountFactors            = new ConcurrentHashMap<>();
@@ -152,7 +155,7 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 		final double[] liborInitialStates = new double[liborPeriodDiscretization.getNumberOfTimeSteps()];
 		for(int i = 0; i < liborPeriodDiscretization.getNumberOfTimeSteps(); i++) {
 			final double rate = forwardRateCurve.getForward(curveModel, liborPeriodDiscretization.getTime(i), liborPeriodDiscretization.getTimeStep(i));
-			liborInitialStates[i] = stateSpaceTransform.getInitialState(rate);
+			liborInitialStates[i] = stateSpaceTransform.getInitialState(rate, i);
 		}
 		final RandomVariable[] initialState = new RandomVariable[getNumberOfComponents()];
 		for(int i = 0; i < getNumberOfComponents(); i++) {
@@ -163,7 +166,7 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 
 	@Override
 	public RandomVariable applyStateSpaceTransform(final MonteCarloProcess process, final int timeIndex, final int componentIndex, final RandomVariable randomVariable) {
-		RandomVariable value = stateSpaceTransform.applyTransform(randomVariable);
+		RandomVariable value = stateSpaceTransform.applyTransform(randomVariable, componentIndex);
 		if(!Double.isInfinite(liborCap)) {
 			value = value.cap(liborCap);
 		}
@@ -172,7 +175,7 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 
 	@Override
 	public RandomVariable applyStateSpaceTransformInverse(final MonteCarloProcess process, final int timeIndex, final int componentIndex, final RandomVariable randomVariable) {
-		return stateSpaceTransform.applyInverseTransform(randomVariable);
+		return stateSpaceTransform.applyInverseTransform(randomVariable, componentIndex);
 	}
 
 	@Override
@@ -199,22 +202,31 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 			final RandomVariable[] realizationAtTimeIndex,
 			final RandomVariable[] realizationPredictor) {
 
-		final double time = process.getTime(timeIndex);
-		int firstForwardRateIndex = this.getLiborPeriodIndex(time) + 1;
-		if(firstForwardRateIndex < 0) {
-			firstForwardRateIndex = -firstForwardRateIndex - 1 + 1;
+		synchronized(driftLazyInitLock) {
+			ensureCacheConsistency(process);
+			if(drift.containsKey(timeIndex)) {
+				return drift.get(timeIndex);
+			}
+
+			final double time = process.getTime(timeIndex);
+			int firstForwardRateIndex = this.getLiborPeriodIndex(time) + 1;
+			if(firstForwardRateIndex < 0) {
+				firstForwardRateIndex = -firstForwardRateIndex - 1 + 1;
+			}
+
+			// Delegate measure-specific drift to the measure plug-in
+			final RandomVariable[] driftCurrent = measure.getDrift(process, timeIndex, firstForwardRateIndex, realizationAtTimeIndex, stateSpaceTransform, this);
+
+			// Itô correction — delegated to the state-space transform plug-in
+			for(int j = firstForwardRateIndex; j < getNumberOfComponents(); j++) {
+				final RandomVariable variance = covarianceModel.getCovariance(time, j, j, realizationAtTimeIndex);
+				final RandomVariable liborAtTimeIndex = realizationAtTimeIndex[j];
+				driftCurrent[j] = driftCurrent[j].add(stateSpaceTransform.getItoCorrection(variance, liborAtTimeIndex, j));
+			}
+
+			drift.put(timeIndex, driftCurrent);
+			return driftCurrent;
 		}
-
-		// Delegate measure-specific drift to the measure plug-in
-		final RandomVariable[] drift = measure.getDrift(process, timeIndex, firstForwardRateIndex, realizationAtTimeIndex, stateSpaceTransform, this);
-
-		// Itô correction — delegated to the state-space transform plug-in
-		for(int j = firstForwardRateIndex; j < getNumberOfComponents(); j++) {
-			final RandomVariable variance = covarianceModel.getCovariance(time, j, j, realizationAtTimeIndex);
-			drift[j] = drift[j].add(stateSpaceTransform.getItoCorrection(variance));
-		}
-
-		return drift;
 	}
 
 	@Override
@@ -222,7 +234,7 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 			final MonteCarloProcess process,
 			final int timeIndex,
 			final int componentIndex,
-			final RandomVariable[] realizationAtTimeIndex) {
+			final RandomVariable[] realizationAtTimeIndex) {				
 		return covarianceModel.getFactorLoading(process.getTime(timeIndex), getLiborPeriod(componentIndex), realizationAtTimeIndex);
 	}
 
@@ -325,6 +337,7 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 			numeraires.clear();
 			numeraireDiscountFactorForwardRates.clear();
 			numeraireDiscountFactors.clear();
+			drift.clear();
 			numerairesProcess = process;
 		}
 	}

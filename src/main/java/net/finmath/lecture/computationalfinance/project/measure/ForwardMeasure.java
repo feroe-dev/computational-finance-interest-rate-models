@@ -117,7 +117,7 @@ public class ForwardMeasure implements Measure {
 			// Negative weight: -δ_j * g(L_j) / (1 + δ_j · L_j)
 			// g(L) = 1 for normal, g(L) = L for log-normal — provided by the state-space plug-in.
 			RandomVariable oneStepMeasureTransform = Scalar.of(-periodLength).discount(forwardRate, periodLength)
-					.mult(stateSpaceTransform.getDriftWeightFactor(forwardRate));
+					.mult(stateSpaceTransform.getDriftWeightFactor(forwardRate, j));
 
 			final RandomVariable[] factorLoading = model.getFactorLoading(process, timeIndex, j, realizationAtTimeIndex);
 
@@ -147,7 +147,7 @@ public class ForwardMeasure implements Measure {
 			// Positive weight: +δ_j * g(L_j) / (1 + δ_j · L_j)
 			// g(L) = 1 for normal, g(L) = L for log-normal — provided by the state-space plug-in.
 			RandomVariable oneStepMeasureTransform = Scalar.of(periodLength).discount(forwardRate, periodLength)
-					.mult(stateSpaceTransform.getDriftWeightFactor(forwardRate));
+					.mult(stateSpaceTransform.getDriftWeightFactor(forwardRate, j));
 
 			final RandomVariable[] factorLoading = model.getFactorLoading(process, timeIndex, j, realizationAtTimeIndex);
 

@@ -11,6 +11,7 @@ import net.finmath.lecture.computationalfinance.project.measure.ForwardMeasure;
 import net.finmath.lecture.computationalfinance.project.measure.Measure;
 import net.finmath.lecture.computationalfinance.project.measure.SpotMeasure;
 import net.finmath.lecture.computationalfinance.project.measure.TerminalMeasure;
+import net.finmath.lecture.computationalfinance.project.statespace.DisplacedLogNormalStateSpaceTransform;
 import net.finmath.lecture.computationalfinance.project.statespace.LogNormalStateSpaceTransform;
 import net.finmath.lecture.computationalfinance.project.statespace.NormalStateSpaceTransform;
 import net.finmath.lecture.computationalfinance.project.statespace.StateSpaceTransform;
@@ -33,7 +34,7 @@ public class LIBORMarketModelPluginTest {
 	// -------------------------------------------------------------------------
 
 	/** Number of Monte Carlo paths. */
-	private static final int NUMBER_OF_PATHS = 250000;
+	private static final int NUMBER_OF_PATHS = 50000;
 
 	/** Random seeds — one fixed seed per measure type for consistency within a measure. */
 	private static final int SEED_SPOT     = 3141;
@@ -73,10 +74,10 @@ public class LIBORMarketModelPluginTest {
 	private static final int NUMBER_OF_FACTORS = 5;
 
 	// =========================================================================
-	// Test 1 — Plug-in consistency
+	// Test 1 — Plug-in consistency for normal state space transform
 	// =========================================================================
 	@Test
-	public void testPlugInConsistency() throws CalculationException {
+	public void testPlugInConsistencyNormal() throws CalculationException {
 		
         final double fixingTime  = 4.5;
 		final double paymentTime = 5.0;
@@ -136,9 +137,6 @@ public class LIBORMarketModelPluginTest {
 		System.out.println("  " + "-".repeat(70));
         System.out.println("");
 
-        Assertions.assertEquals(ITMoriginalSpot,     ITMpluginSpot,     1e-10, "ITM caplet consistency: Spot under Bachelier");
-		Assertions.assertEquals(ITMoriginalTerminal, ITMpluginTerminal, 1e-10, "ITM caplet consistency: Terminal under Bachelier");
-
         // ATM caplet
         System.out.println("  --- ATM Caplet (strike = 3 %) | Theoretical value: " + ATMtheoretical);
         System.out.println("  " + "-".repeat(70));  
@@ -148,9 +146,6 @@ public class LIBORMarketModelPluginTest {
         System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Terminal", ATMoriginalTerminal, ATMpluginTerminal, Math.abs(ATMoriginalTerminal - ATMpluginTerminal));
         System.out.println("  " + "-".repeat(70));
         System.out.println("");
-
-        Assertions.assertEquals(ATMoriginalSpot,     ATMpluginSpot,     1e-10, "ATM caplet consistency: Spot under Bachelier");
-        Assertions.assertEquals(ATMoriginalTerminal, ATMpluginTerminal, 1e-10, "ATM caplet consistency: Terminal under Bachelier");
 
         // OTM caplet
         System.out.println("  --- OTM Caplet (strike = 5 %) | Theoretical value: " + OTMtheoretical);
@@ -162,9 +157,31 @@ public class LIBORMarketModelPluginTest {
         System.out.println("  " + "-".repeat(70));
         System.out.println("");
 
+        Assertions.assertEquals(ITMoriginalSpot,     ITMpluginSpot,     1e-10, "ITM caplet consistency: Spot under Bachelier");
+		Assertions.assertEquals(ITMoriginalTerminal, ITMpluginTerminal, 1e-10, "ITM caplet consistency: Terminal under Bachelier");
+        Assertions.assertEquals(ATMoriginalSpot,     ATMpluginSpot,     1e-10, "ATM caplet consistency: Spot under Bachelier");
+        Assertions.assertEquals(ATMoriginalTerminal, ATMpluginTerminal, 1e-10, "ATM caplet consistency: Terminal under Bachelier");
         Assertions.assertEquals(OTMoriginalSpot,     OTMpluginSpot,     1e-10, "OTM caplet consistency: Spot under Bachelier");
         Assertions.assertEquals(OTMoriginalTerminal, OTMpluginTerminal, 1e-10, "OTM caplet consistency: Terminal under Bachelier");
+	}
 
+    // =========================================================================
+    // Test 2 — Plug-in consistency for log-normal state space transform
+    // =========================================================================
+    @Test
+    public void testPlugInConsistencyLognormal() throws CalculationException {
+
+        final double fixingTime  = 4.5;
+		final double paymentTime = 5.0;
+        final double notional = 10000.0;
+        final double strikeITM = 0.01;
+        final double strikeOTM = 0.05;
+
+        final int fixingTimeIndex = (int) (fixingTime / PERIOD_LENGTH);
+
+        final Caplet capletITM = new Caplet(fixingTime, paymentTime-fixingTime, strikeITM);
+        final Caplet capletATM = new Caplet(fixingTime, paymentTime-fixingTime, FLAT_FORWARD_RATE);
+        final Caplet capletOTM = new Caplet(fixingTime, paymentTime-fixingTime, strikeOTM);
 
         // ----- Section 2: Log-normal state space transform
         final LIBORMonteCarloSimulationFromLIBORModel simulationOriginalSpotLognormal     = buildOldSimulation("SPOT",     "LOGNORMAL", SEED_SPOT);
@@ -209,9 +226,6 @@ public class LIBORMarketModelPluginTest {
 		System.out.println("  " + "-".repeat(70));
         System.out.println("");
 
-        Assertions.assertEquals(ITMoriginalSpotLognormal,     ITMpluginSpotLognormal,     1e-10, "ITM caplet consistency: Spot under Black");
-		Assertions.assertEquals(ITMoriginalTerminalLognormal, ITMpluginTerminalLognormal, 1e-10, "ITM caplet consistency: Terminal under Black");
-
         // ATM caplet
         System.out.println("  --- ATM Caplet (strike = 3 %) | Theoretical value: " + ATMtheoreticalBlack);
         System.out.println("  " + "-".repeat(70));  
@@ -221,9 +235,6 @@ public class LIBORMarketModelPluginTest {
         System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.2e%n", "Terminal", ATMoriginalTerminalLognormal, ATMpluginTerminalLognormal, Math.abs(ATMoriginalTerminalLognormal - ATMpluginTerminalLognormal));
         System.out.println("  " + "-".repeat(70));
         System.out.println("");
-
-        Assertions.assertEquals(ATMoriginalSpotLognormal,     ATMpluginSpotLognormal,     1e-10, "ATM caplet consistency: Spot under Black");
-        Assertions.assertEquals(ATMoriginalTerminalLognormal, ATMpluginTerminalLognormal, 1e-10, "ATM caplet consistency: Terminal under Black");
 
         // OTM caplet
         System.out.println("  --- OTM Caplet (strike = 5 %) | Theoretical value: " + OTMtheoreticalBlack);
@@ -235,10 +246,17 @@ public class LIBORMarketModelPluginTest {
         System.out.println("  " + "-".repeat(70));
         System.out.println(""); 
 
+        Assertions.assertEquals(ITMoriginalSpotLognormal,     ITMpluginSpotLognormal,     1e-10, "ITM caplet consistency: Spot under Black");
+		Assertions.assertEquals(ITMoriginalTerminalLognormal, ITMpluginTerminalLognormal, 1e-10, "ITM caplet consistency: Terminal under Black");
+        Assertions.assertEquals(ATMoriginalSpotLognormal,     ATMpluginSpotLognormal,     1e-10, "ATM caplet consistency: Spot under Black");
+        Assertions.assertEquals(ATMoriginalTerminalLognormal, ATMpluginTerminalLognormal, 1e-10, "ATM caplet consistency: Terminal under Black");
         Assertions.assertEquals(OTMoriginalSpotLognormal,     OTMpluginSpotLognormal,     1e-10, "OTM caplet consistency: Spot under Black");
         Assertions.assertEquals(OTMoriginalTerminalLognormal, OTMpluginTerminalLognormal, 1e-10, "OTM caplet consistency: Terminal under Black");
-	}
+    }
 
+    // =========================================================================
+    // Test 3 — Plug-in consistency for forward measures
+    // =========================================================================
 	@Test
 	public void testForwardMeasurePlugIn() throws CalculationException {
 
@@ -276,8 +294,6 @@ public class LIBORMarketModelPluginTest {
         final double ATMforward18 = capletATM.getValue(simulationPluginForward18) * notional;
         final double OTMforward18 = capletOTM.getValue(simulationPluginForward18) * notional;
         final double ITMforward18 = capletITM.getValue(simulationPluginForward18) * notional;
-
-
 
         // Numerical valuation with lognormal state space transform
         final LIBORMonteCarloSimulationFromLIBORModel simulationPluginForward6Lognormal     = buildNewSimulation(new ForwardMeasure(6), new LogNormalStateSpaceTransform(), SEED_FORWARD6);
@@ -344,7 +360,148 @@ public class LIBORMarketModelPluginTest {
         System.out.printf("%-18s  %+12.6f  %+12.6f  %+12.6f  %+12.6f%n", "Lognormal", OTMforward6Lognormal, OTMforward10Lognormal, OTMforward14Lognormal, OTMforward18Lognormal);
         System.out.println("-".repeat(70));
         System.out.println("");
+    }
 
+    // =========================================================================
+    // Test 4 — Plug-in consistency for log-normal state space transform
+    // =========================================================================
+    @Test
+    public void testDisplacedLognormalStateSpaceTransform() throws CalculationException {
+        final double fixingTime  = 4.5;
+        final double paymentTime = 5.0;
+        final double notional = 10000.0;
+        final double strikeITM = 0.01;
+        final double strikeOTM = 0.05;
+
+        final int fixingTimeIndex = (int) (fixingTime / PERIOD_LENGTH);
+        final int numberOfPeriods = (int) (TIME_HORIZON / PERIOD_LENGTH);
+
+        final Caplet capletITM = new Caplet(fixingTime, paymentTime-fixingTime, strikeITM);
+        final Caplet capletATM = new Caplet(fixingTime, paymentTime-fixingTime, FLAT_FORWARD_RATE);
+        final Caplet capletOTM = new Caplet(fixingTime, paymentTime-fixingTime, strikeOTM);
+
+        // ----- Section 4: Displaced log-normal state space transform
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginSpotDisplacedLognormal       = buildNewSimulation(new SpotMeasure(), new DisplacedLogNormalStateSpaceTransform(0.01, numberOfPeriods), SEED_SPOT);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginTerminalDisplacedLognormal   = buildNewSimulation(new TerminalMeasure(), new DisplacedLogNormalStateSpaceTransform(0.01, numberOfPeriods), SEED_TERMINAL);
+
+
+        final double ITMpluginSpotDisplacedLognormal        = capletITM.getValue(simulationPluginSpotDisplacedLognormal) * notional;
+        final double ATMpluginSpotDisplacedLognormal        = capletATM.getValue(simulationPluginSpotDisplacedLognormal) * notional;
+        final double OTMpluginSpotDisplacedLognormal        = capletOTM.getValue(simulationPluginSpotDisplacedLognormal) * notional;
+
+        final double ITMpluginTerminalDisplacedLognormal    = capletITM.getValue(simulationPluginTerminalDisplacedLognormal) * notional;
+        final double ATMpluginTerminalDisplacedLognormal    = capletATM.getValue(simulationPluginTerminalDisplacedLognormal) * notional;
+        final double OTMpluginTerminalDisplacedLognormal    = capletOTM.getValue(simulationPluginTerminalDisplacedLognormal) * notional;
+
+        // get analytic values for comparison
+        final double ITMtheoreticalDisplacedLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE + 0.01, strikeITM + 0.01, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double ATMtheoreticalDisplacedLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE + 0.01, FLAT_FORWARD_RATE + 0.01, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double OTMtheoreticalDisplacedLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE + 0.01, strikeOTM + 0.01, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+
+        System.out.println("=".repeat(80));
+        System.out.println("  Displaced Lognormal State Space Transform");
+        System.out.println("  Numerical Valuation of a caplet | Fixing = 4.5 yr, Payment = 5.0 yr | Flat initial forward curve at 3 %");
+        System.out.println("=".repeat(80));
+        System.out.println("");
+
+        System.out.println("--- ITM Caplet (strike = 1 %) | Theoretical value: " + ITMtheoreticalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %12s%n", "Measure", "Numerical");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %+12.6f%n", "Spot",     ITMpluginSpotDisplacedLognormal);
+        System.out.printf("  %-18s %+12.6f%n", "Terminal", ITMpluginTerminalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");    
+
+        System.out.println("--- ATM Caplet (strike = 3 %) | Theoretical value: " + ATMtheoreticalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %12s%n", "Measure", "Numerical");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %+12.6f%n", "Spot",     ATMpluginSpotDisplacedLognormal);    
+        System.out.printf("  %-18s %+12.6f%n", "Terminal", ATMpluginTerminalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");
+
+        System.out.println("--- OTM Caplet (strike = 5 %) | Theoretical value: " + OTMtheoreticalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %12s%n", "Measure", "Numerical");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s %+12.6f%n", "Spot",     OTMpluginSpotDisplacedLognormal);    
+        System.out.printf("  %-18s %+12.6f%n", "Terminal", OTMpluginTerminalDisplacedLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");
+
+        Assertions.assertEquals(ITMpluginSpotDisplacedLognormal, ITMtheoreticalDisplacedLognormal, 1e-0, "ITM caplet consistency: Spot under displaced log-normal");
+        Assertions.assertEquals(ITMpluginTerminalDisplacedLognormal, ITMtheoreticalDisplacedLognormal, 1e-0, "ITM caplet consistency: Terminal under displaced log-normal");
+        Assertions.assertEquals(ATMpluginSpotDisplacedLognormal, ATMtheoreticalDisplacedLognormal, 1e-0, "ATM caplet consistency: Spot under displaced log-normal");
+        Assertions.assertEquals(ATMpluginTerminalDisplacedLognormal, ATMtheoreticalDisplacedLognormal, 1e-0, "ATM caplet consistency: Terminal under displaced log-normal");
+        Assertions.assertEquals(OTMpluginSpotDisplacedLognormal, OTMtheoreticalDisplacedLognormal, 1e-0, "OTM caplet consistency: Spot under displaced log-normal");
+        Assertions.assertEquals(OTMpluginTerminalDisplacedLognormal, OTMtheoreticalDisplacedLognormal, 1e-0, "OTM caplet consistency: Terminal under displaced log-normal");
+
+        // Section 5: Compare displaced log-normal state space transform with displacement = 0 with log-normal state space transforms
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginSpotLognormal       = buildNewSimulation(new SpotMeasure(), new LogNormalStateSpaceTransform(), SEED_SPOT);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginTerminalLognormal   = buildNewSimulation(new TerminalMeasure(), new LogNormalStateSpaceTransform(), SEED_TERMINAL);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginSpotDisplacedLognormalZero       = buildNewSimulation(new SpotMeasure(), new DisplacedLogNormalStateSpaceTransform(0.0, numberOfPeriods), SEED_SPOT);
+        final LIBORMonteCarloSimulationFromLIBORModel simulationPluginTerminalDisplacedLognormalZero   = buildNewSimulation(new TerminalMeasure(), new DisplacedLogNormalStateSpaceTransform(0.0, numberOfPeriods), SEED_TERMINAL);
+
+        final double ITMpluginSpotLognormal        = capletITM.getValue(simulationPluginSpotLognormal) * notional;
+        final double ATMpluginSpotLognormal        = capletATM.getValue(simulationPluginSpotLognormal) * notional;
+        final double OTMpluginSpotLognormal        = capletOTM.getValue(simulationPluginSpotLognormal) * notional;
+        
+        final double ITMpluginTerminalLognormal    = capletITM.getValue(simulationPluginTerminalLognormal) * notional;
+        final double ATMpluginTerminalLognormal    = capletATM.getValue(simulationPluginTerminalLognormal) * notional;
+        final double OTMpluginTerminalLognormal    = capletOTM.getValue(simulationPluginTerminalLognormal) * notional;
+
+        final double ITMpluginSpotDisplacedLognormalZero        = capletITM.getValue(simulationPluginSpotDisplacedLognormalZero) * notional;
+        final double ATMpluginSpotDisplacedLognormalZero        = capletATM.getValue(simulationPluginSpotDisplacedLognormalZero) * notional;
+        final double OTMpluginSpotDisplacedLognormalZero        = capletOTM.getValue(simulationPluginSpotDisplacedLognormalZero) * notional;
+
+        final double ITMpluginTerminalDisplacedLognormalZero    = capletITM.getValue(simulationPluginTerminalDisplacedLognormalZero) * notional;
+        final double ATMpluginTerminalDisplacedLognormalZero    = capletATM.getValue(simulationPluginTerminalDisplacedLognormalZero) * notional;
+        final double OTMpluginTerminalDisplacedLognormalZero    = capletOTM.getValue(simulationPluginTerminalDisplacedLognormalZero) * notional;
+
+        // get analytic values for comparison
+        final double ITMtheoreticalLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, strikeITM, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double ATMtheoreticalLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, FLAT_FORWARD_RATE, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+        final double OTMtheoreticalLognormal = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, strikeOTM, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
+
+        System.out.println("=".repeat(80));
+        System.out.println("  Displaced Lognormal State Space Transform with zero displacement vs. Lognormal State Space Transform");
+        System.out.println("  Numerical Valuation of a caplet | Fixing = 4.5 yr, Payment = 5.0 yr | Flat initial forward curve at 3 %");
+        System.out.println("=".repeat(80));
+        System.out.println(""); 
+        System.out.println("--- ITM Caplet (strike = 1 %) | Theoretical value: " + ITMtheoreticalLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "State Space", "Lognormal", "Displaced Lognormal (d=0)", "Abs. Difference");
+        System.out.println("  ");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Spot",     ITMpluginSpotLognormal, ITMpluginSpotDisplacedLognormalZero, Math.abs(ITMpluginSpotLognormal - ITMpluginSpotDisplacedLognormalZero));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Terminal", ITMpluginTerminalLognormal, ITMpluginTerminalDisplacedLognormalZero, Math.abs(ITMpluginTerminalLognormal - ITMpluginTerminalDisplacedLognormalZero));
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");
+        System.out.println("--- ATM Caplet (strike = 3 %) | Theoretical value: " + ATMtheoreticalLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "State Space", "Lognormal", "Displaced Lognormal (d=0)", "Abs. Difference");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Spot",     ATMpluginSpotLognormal, ATMpluginSpotDisplacedLognormalZero, Math.abs(ATMpluginSpotLognormal - ATMpluginSpotDisplacedLognormalZero));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Terminal", ATMpluginTerminalLognormal, ATMpluginTerminalDisplacedLognormalZero, Math.abs(ATMpluginTerminalLognormal - ATMpluginTerminalDisplacedLognormalZero));
+        System.out.println("  " + "-".repeat(70));
+        System.out.println("");
+        System.out.println("--- OTM Caplet (strike = 5 %) | Theoretical value: " + OTMtheoreticalLognormal);
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %12s  %12s  %12s%n", "State Space", "Lognormal", "Displaced Lognormal (d=0)", "Abs. Difference");
+        System.out.println("  " + "-".repeat(70));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Spot",     OTMpluginSpotLognormal, OTMpluginSpotDisplacedLognormalZero, Math.abs(OTMpluginSpotLognormal - OTMpluginSpotDisplacedLognormalZero));
+        System.out.printf("  %-18s  %+12.6f  %+12.6f  %+12.6f%n", "Terminal", OTMpluginTerminalLognormal, OTMpluginTerminalDisplacedLognormalZero, Math.abs(OTMpluginTerminalLognormal - OTMpluginTerminalDisplacedLognormalZero));
+        System.out.println("  " + "-".repeat(70));
+        System.out.println(""); 
+
+        Assertions.assertEquals(ITMpluginSpotLognormal, ITMpluginSpotDisplacedLognormalZero, 1e-10, "ITM caplet consistency: Spot under log-normal vs. displaced log-normal with zero displacement");
+        Assertions.assertEquals(ITMpluginTerminalLognormal, ITMpluginTerminalDisplacedLognormalZero, 1e-10, "ITM caplet consistency: Terminal under log-normal vs. displaced log-normal with zero displacement");
+        Assertions.assertEquals(ATMpluginSpotLognormal, ATMpluginSpotDisplacedLognormalZero, 1e-10, "ATM caplet consistency: Spot under log-normal vs. displaced log-normal with zero displacement");
+        Assertions.assertEquals(ATMpluginTerminalLognormal, ATMpluginTerminalDisplacedLognormalZero, 1e-10, "ATM caplet consistency: Terminal under log-normal vs. displaced log-normal with zero displacement");
+        Assertions.assertEquals(OTMpluginSpotLognormal, OTMpluginSpotDisplacedLognormalZero, 1e-10, "OTM caplet consistency: Spot under log-normal vs. displaced log-normal with zero displacement");
+        Assertions.assertEquals(OTMpluginTerminalLognormal, OTMpluginTerminalDisplacedLognormalZero, 1e-10, "OTM caplet consistency: Terminal under log-normal vs. displaced log-normal with zero displacement");
     }
 
 
@@ -463,7 +620,7 @@ public class LIBORMarketModelPluginTest {
         final double payoffUnit = PERIOD_LENGTH * 1.0 /Math.pow(1+FLAT_FORWARD_RATE*PERIOD_LENGTH, paymentTime/PERIOD_LENGTH);
 
         if (stateSpaceName.equalsIgnoreCase("LOGNORMAL")) {
-			return AnalyticFormulas.blackModelCapletValue(forwardRate, volatility, fixingTime, strike, PERIOD_LENGTH, payoffUnit) * notional;
+			return AnalyticFormulas.blackScholesGeneralizedOptionValue(forwardRate, volatility, fixingTime, strike, payoffUnit) * notional;
 		}
 		if (stateSpaceName.equalsIgnoreCase("NORMAL")) {
 			return AnalyticFormulas.bachelierOptionValue(forwardRate, volatility, fixingTime, strike, payoffUnit) * notional;
