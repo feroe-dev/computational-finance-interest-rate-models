@@ -83,7 +83,7 @@ public class LIBORMarketModelPluginTest {
     // Ex1 — Measure plug-in: Forward Measure
     // =========================================================================
 	@Test
-	public void ex1_forwardMeasure() throws CalculationException {
+	public void ex1and2_forwardMeasure() throws CalculationException {
 
         final double fixingTime  = 4.5;
 		final double paymentTime = 5.0;

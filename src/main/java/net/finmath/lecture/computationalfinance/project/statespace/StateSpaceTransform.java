@@ -25,6 +25,30 @@ import net.finmath.stochastic.RandomVariable;
  * {@code AugmentedLIBORMarketModel} to support arbitrary state-space
  * transforms without any modification to the model class itself (open/closed principle).
  *
+ * <p>
+ * <b>Design rationale — avoiding incompatible transform/volatility combinations:</b>
+ * The Itô correction and the drift weight factor are not independent of the transform:
+ * a log-normal transform requires \( -\tfrac{1}{2}\sigma_j^2 \) and \( g(L_j)=L_j \),
+ * while a normal transform requires both to be identically zero / one.
+ * If these were separate configuration objects, a caller could accidentally pair a
+ * log-normal transform with a zero Itô correction and obtain silently wrong results.
+ * By bundling {@link #getDriftWeightFactor} and {@link #getItoCorrection} in the
+ * <em>same</em> interface as the transform methods, all five transform-dependent
+ * behaviours are atomically bound to a single object — it is physically impossible
+ * to inject a mismatched correction. This is an application of the Strategy pattern.
+ *
+ * <p>
+ * <b>Design rationale — per-index parameters via {@code liborIndex}:</b>
+ * Every method in this interface receives a {@code liborIndex} parameter {@code j}.
+ * For simple transforms such as {@link NormalStateSpaceTransform} and
+ * {@link LogNormalStateSpaceTransform} this parameter is unused, because the same
+ * function applies to every rate. It was included from the start, however, to
+ * anticipate transforms that require per-rate parameters.
+ * {@link DisplacedLogNormalStateSpaceTransform} exploits this directly: it stores a
+ * {@code double[] displacement} array and looks up {@code displacement[liborIndex]}
+ * in every method call, giving each forward rate its own displacement \( a_j \)
+ * without any change to the interface or the model.
+ *
  * @author Felipe, GM-1, GM-2
  * @see NormalStateSpaceTransform
  * @see LogNormalStateSpaceTransform
