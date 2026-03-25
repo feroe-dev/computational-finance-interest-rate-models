@@ -12,18 +12,21 @@ import net.finmath.stochastic.RandomVariable;
  *
  * <p>
  * Under this measure the drift of forward rate \( L_j \) is chosen so that
- * the entire initial term structure propagates forward at the speed of one
- * period per period:
+ * the entire initial term structure propagates forward by one period at every
+ * simulation step. Let \( m = m(t) \) denote the index of the current period
+ * (i.e.\ {@code firstForwardRateIndex}). The drift at simulation time \( t \) is:
  * \[
- *   \mu_j = \frac{f^{-1}(L_{j-1}(0)) - f^{-1}(L_j(0))}{\delta_j},
+ *   \mu_j(t) = \frac{X_{j-m}(0) - X_{j-m+1}(0)}{\delta_{m-1}},
+ *   \qquad X_i(0) = f^{-1}(L_i(0)),
  * \]
- * where \( f^{-1} \) is the inverse state-space transform
- * (i.e. the initial internal state corresponding to the initial market rate).
+ * where \( f^{-1} \) is the inverse state-space transform,
+ * \( L_i(0) \) is the initial forward rate for period \( i \),
+ * and \( \delta_{m-1} \) is the length of the period preceding the current one.
  *
  * <p>
- * Consequently, after \( k \) time steps of length \( \delta \):
+ * Consequently, after \( k \) time steps:
  * \[
- *   \mathbb{E}[L_j(T_k)] = L_{j-k}(0),
+ *   \mathbb{E}[L_j(T_k)] \approx L_{j-k}(0),
  * \]
  * meaning the yield curve is "ridden" forward in time — rate \( L_j \)
  * converges toward the initial short-end level as time passes.
@@ -53,12 +56,16 @@ public class RidingTheCurveMeasure implements Measure {
 	 * {@inheritDoc}
 	 *
 	 * <p>
-	 * For component \( j \geq \texttt{firstForwardRateIndex} \) the drift is
+	 * Let \( m = \texttt{firstForwardRateIndex} \). For each live component
+	 * \( j \geq m \) the drift is:
 	 * \[
-	 *   \mu_j = \frac{X_{j-1}(0) - X_j(0)}{\delta_j}, \qquad X_j(0) = f^{-1}(L_j(0)),
+	 *   \mu_j(t) = \frac{X_{j-m}(0) - X_{j-m+1}(0)}{\delta_{m-1}},
+	 *   \qquad X_i(0) = f^{-1}(L_i(0)),
 	 * \]
-	 * where the initial internal state \( X_j(0) \) is obtained from the
-	 * state-space transform plug-in. For \( j = 0 \) the drift is zero.
+	 * where \( L_i(0) \) is looked up from the initial forward curve and
+	 * \( \delta_{m-1} \) is the period length of the preceding tenor interval.
+	 * The initial internal states \( X_i(0) \) are obtained via
+	 * {@link StateSpaceTransform#getInitialState(double, int)}.
 	 */
 	@Override
 	public RandomVariable[] getDrift(

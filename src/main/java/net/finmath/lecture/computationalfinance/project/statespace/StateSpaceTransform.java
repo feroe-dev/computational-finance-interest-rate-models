@@ -107,5 +107,5 @@ public interface StateSpaceTransform {
 	 * @return The Itô correction \( -\tfrac{1}{2}\sigma_j^2 \) (log-normal)
 	 *         or zero (normal) as a {@link RandomVariable}.
 	 */
-	RandomVariable getItoCorrection(RandomVariable varianceAtTimeIndex, RandomVariable liborAtTimeIndex	, int liborIndex);
+	RandomVariable getItoCorrection(RandomVariable varianceAtTimeIndex, RandomVariable liborAtTimeIndex, int liborIndex);
 }

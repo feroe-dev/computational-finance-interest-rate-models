@@ -36,7 +36,7 @@ import net.finmath.stochastic.Scalar;
  *    if \( t \leq T_k \) and
  *    \[
  *       \mu_j(t) =   +\sum_{l=m(t)+1}^{j}
- *                           frac{\delta_l}{1+\delta_l L_l(t)}\,(\lambda_j \cdot \lambda_l)
+ *                           \frac{\delta_l}{1+\delta_l L_l(t)}\,(\lambda_j \cdot \lambda_l)
  *    \]
  *    if \( t > T_k \)
  *  </li>
