@@ -3,6 +3,6 @@
 .classpath
 .project
 
-/Plans/
 *.pdf
 .DS_Store
+/Presentation/
