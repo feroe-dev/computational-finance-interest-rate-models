@@ -23,14 +23,14 @@ import net.finmath.stochastic.RandomVariable;
  * <p>
  * Consequently, after \( k \) time steps of length \( \delta \):
  * \[
- *   \mathbb{E}[L_j(T_k)] \approx L_{j-k}(0),
+ *   \mathbb{E}[L_j(T_k)] = L_{j-k}(0),
  * \]
  * meaning the yield curve is "ridden" forward in time — rate \( L_j \)
  * converges toward the initial short-end level as time passes.
  *
  * <p>
- * The numeraire is set to 1, consistent with simulation under the real-world
- * measure \( \mathbb{P} \).
+ * The numeraire is set to 1 so that {@code product.getValue(simulation)} returns
+ * the raw (undiscounted) expected cashflow under \( \mathbb{P} \).
  *
  * @author Felipe, GM-1, GM-2
  * @see Measure
@@ -72,20 +72,23 @@ public class RidingTheCurveMeasure implements Measure {
 		final int n = model.getNumberOfComponents();
 		final RandomVariable[] drift = new RandomVariable[n];
 
+        // Let k = firstForwardRateIndex, i. e. T_{k-1} <= t_{timeIndex} < T_k.
+		// We want mu_j(t) = (L_{j-k}(0) - L_{j-(k-1)}(0)) / delta_{k-1} for T_{k-1} <= t < T_k
 		for(int j = firstForwardRateIndex; j < n; j++) {
-			final double periodLength = model.getLiborPeriodDiscretization().getTimeStep(j);
-			final double rateJ = forwardCurve.getForward(null, model.getLiborPeriod(j), periodLength);
-			final double stateJ = stateSpaceTransform.getInitialState(rateJ, j);
+			final double periodLength = model.getLiborPeriodDiscretization().getTimeStep(firstForwardRateIndex-1);
 
-			final double stateJm1;
-			if(j > 0) {
-				final double rateJm1 = forwardCurve.getForward(null, model.getLiborPeriod(j - 1), periodLength);
-				stateJm1 = stateSpaceTransform.getInitialState(rateJm1, j - 1);
+			final double rateNew = forwardCurve.getForward(null, model.getLiborPeriod(j-firstForwardRateIndex), model.getLiborPeriodDiscretization().getTimeStep(j-firstForwardRateIndex));
+			final double stateNew = stateSpaceTransform.getInitialState(rateNew, j-firstForwardRateIndex); // L_{j-k}(0)
+
+			final double stateOld; // L_{j-(k-1)}(0)
+			if(firstForwardRateIndex > 0) { // which should always be the case
+				final double rateOld = forwardCurve.getForward(null, model.getLiborPeriod(j-firstForwardRateIndex+1), model.getLiborPeriodDiscretization().getTimeStep(j-firstForwardRateIndex+1));
+				stateOld = stateSpaceTransform.getInitialState(rateOld, j - firstForwardRateIndex + 1);
 			} else {
-				stateJm1 = stateJ; // j = 0: no predecessor, zero drift
+				stateOld = 0; // no predecessor
 			}
 
-			drift[j] = model.getRandomVariableForConstant((stateJm1 - stateJ) / periodLength);
+			drift[j] = model.getRandomVariableForConstant((stateNew - stateOld) / periodLength);
 		}
 		return drift;
 	}

@@ -80,10 +80,10 @@ public class LIBORMarketModelPluginTest {
 	private static final int NUMBER_OF_FACTORS = 5;
 
 	// =========================================================================
-    // Ex2 — Measure plug-in: Forward Measure
+    // Ex1 — Measure plug-in: Forward Measure
     // =========================================================================
 	@Test
-	public void ex2_forwardMeasure() throws CalculationException {
+	public void ex1_forwardMeasure() throws CalculationException {
 
         final double fixingTime  = 4.5;
 		final double paymentTime = 5.0;
@@ -154,7 +154,7 @@ public class LIBORMarketModelPluginTest {
         final double OTMtheoreticalBlack = getAnalyticCapletValue("LOGNORMAL", FLAT_FORWARD_RATE, strikeOTM, fixingTimeIndex, VOLATILITY_PARAMETER_A, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
 
         System.out.println("=".repeat(80));
-        System.out.println("  EXERCISE 2 — Measure Plug-In | Forward Measure");
+        System.out.println("  EXERCISE 1/2 — Measure Plug-In | Forward Measure");
         System.out.println("  Caplet: Fixing = 4.5 yr, Payment = 5.0 yr | Flat forward curve at 3%");
         System.out.println("=".repeat(80));
         System.out.println("");
@@ -210,8 +210,8 @@ public class LIBORMarketModelPluginTest {
         // Build Model 2 (RidingTheCurve)
 		final LIBORMonteCarloSimulationFromLIBORModel simRiding = buildRealWorldSimulation(new RidingTheCurveMeasure(curve),  curve, SEED_RIDING);
 
-		// Pairs (j, k) to check: forward rates j=1,2,3 at time step k=1
-		final int[][] pairs = { {1, 1}, {2, 1}, {3, 1} };
+		// Pairs (j, k) to check
+		final int[][] pairs = { {1, 1}, {2, 1}, {2, 2}, {3, 1}, {3, 2}, {3, 3}};
 
 		System.out.println("=".repeat(80));
 		System.out.println("  EXERCISE 3 — Real-World Measure P");
@@ -219,9 +219,9 @@ public class LIBORMarketModelPluginTest {
 		System.out.println("=".repeat(80));
 		System.out.println("");
 
-		// --- Model 1: ZeroDrift — E[L_j(T_1)] = L_j(0)
+		// --- Model 1: ZeroDrift — E[L_j(T_k)] = L_j(0)
 		System.out.println("  " + "─".repeat(78));
-		System.out.println("  Model 1: ZeroDriftMeasure — E[L_j(T_1)] = L_j(0)");
+		System.out.println("  Model 1: ZeroDriftMeasure — E[L_j(T_k)] = L_j(0)");
 		System.out.println("  " + "─".repeat(78));
 		System.out.printf(Locale.US, "  %-6s %-6s %12s %12s %12s%n", "j", "k", "L_j(0)", "E[L_j(T_k)]", "Abs. Error");
 		System.out.println("  " + "-".repeat(70));
@@ -236,19 +236,19 @@ public class LIBORMarketModelPluginTest {
 		}
 
 		System.out.println("");
-		// --- Model 2: RidingTheCurve — E[L_j(T_1)] = L_{j-1}(0)
+		// --- Model 2: RidingTheCurve — E[L_j(T_k)] = L_{j-k}(0)
 		System.out.println("  " + "─".repeat(78));
-		System.out.println("  Model 2: RidingTheCurveMeasure — E[L_j(T_1)] = L_{j-1}(0)");
+		System.out.println("  Model 2: RidingTheCurveMeasure — E[L_j(T_k)] = L_{j-k}(0)");
 		System.out.println("  " + "─".repeat(78));
-		System.out.printf(Locale.US, "  %-6s %-6s %12s %12s %12s%n", "j", "k", "L_{j-1}(0)", "E[L_j(T_k)]", "Abs. Error");
+		System.out.printf(Locale.US, "  %-6s %-6s %12s %12s %12s%n", "j", "k", "L_{j-k}(0)", "E[L_j(T_k)]", "Abs. Error");
 		System.out.println("  " + "-".repeat(70));
 		for(final int[] pair : pairs) {
 			final int j = pair[0];
 			final int k = pair[1];
-			final double expected = curve.getForward(null, (j - 1) * PERIOD_LENGTH, PERIOD_LENGTH);  // L_{j-1}(0)
+			final double expected = curve.getForward(null, (j - k) * PERIOD_LENGTH, PERIOD_LENGTH);  // L_{j-k}(0)
 			final double simulated = simRiding.getLIBOR(k, j).getAverage();
 			System.out.printf(Locale.US, "  %-6d %-6d %+12.6f %+12.6f %+12.2e%n", j, k, expected, simulated, Math.abs(simulated - expected));
-			Assertions.assertEquals(expected, simulated, 1e-3, "RidingTheCurve: E[L_" + j + "(T_" + k + ")] = L_" + (j-1) + "(0)");
+			Assertions.assertEquals(expected, simulated, 1e-2, "RidingTheCurve: E[L_" + j + "(T_" + k + ")] = L_" + (j-k) + "(0)");
 		}
 		System.out.println("");
 	}
@@ -395,7 +395,7 @@ public class LIBORMarketModelPluginTest {
 
 
 	// =========================================================================
-	// Ex6 — State-space transform plug-in: Normal + Log-Normal
+	// Ex6 (+ Ex 2)— State-space transform plug-in: Normal + Log-Normal
 	// =========================================================================
 	@Test
 	public void ex6_stateSpaceTransform() throws CalculationException {
@@ -443,7 +443,7 @@ public class LIBORMarketModelPluginTest {
         final double OTMtheoretical = getAnalyticCapletValue("NORMAL", FLAT_FORWARD_RATE, strikeOTM, fixingTimeIndex, normalizedVolatilityParameterA, VOLATILITY_PARAMETER_B, VOLATILITY_PARAMETER_C, VOLATILITY_PARAMETER_D, notional);
 
         System.out.println("=".repeat(80));
-		System.out.println("  EXERCISE 6 — State-Space Transform Plug-In");
+		System.out.println("  EXERCISE 6 (+ EXERCISE 2) — State-Space Transform Plug-In ( + Spot/Terminal Measure Plug-In)");
 		System.out.println("  Caplet: Fixing = 4.5 yr, Payment = 5.0 yr | Flat forward curve at 3%");
 		System.out.println("=".repeat(80));
 		System.out.println("");

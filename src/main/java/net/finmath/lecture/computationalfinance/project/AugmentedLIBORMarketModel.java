@@ -59,12 +59,12 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 	/** Tenor discretization T_0 &lt; T_1 &lt; ... &lt; T_n. */
 	private final TimeDiscretization liborPeriodDiscretization;
 
-	private final AnalyticModel      curveModel;
-	private final ForwardCurve       forwardRateCurve;
-	private final DiscountCurve      discountCurve;
-	private final RandomVariableFactory randomVariableFactory;
+	private final AnalyticModel          curveModel;
+	private final ForwardCurve           forwardRateCurve;
+	private final DiscountCurve          discountCurve;
+	private final RandomVariableFactory  randomVariableFactory;
 
-	private LIBORCovarianceModel     covarianceModel;
+	private final LIBORCovarianceModel   covarianceModel;
 
 	/** The plug-in measure — determines drift and numeraire. */
 	private final Measure            measure;
@@ -78,7 +78,7 @@ public class AugmentedLIBORMarketModel extends AbstractProcessModel implements L
 	private double[][][]             integratedLIBORCovariance;
 	private final transient Object   integratedLIBORCovarianceLazyInitLock = new Object();
 
-	// Numeraire cache — invalidated when the process changes
+	// Numeraire and drift cache — invalidated when the process changes
 	private transient MonteCarloProcess                         numerairesProcess = null;
 	private transient ConcurrentHashMap<Integer, RandomVariable[]> drift            = new ConcurrentHashMap<>();
 	private final transient Object   driftLazyInitLock                     = new Object();
