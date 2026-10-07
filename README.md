@@ -53,3 +53,7 @@ The commit history shows each person's individual contributions.
 ## Acknowledgements
 
 The project template, `LectureProjectData` and the build configuration were provided by the lecture (Christian Fries, quantLab). The model is based on [finmath-lib](https://github.com/finmath/finmath-lib) (Apache License 2.0).
+
+## License
+
+`AugmentedLIBORMarketModel.java` is a modified version of `LIBORMarketModelFromCovarianceModel` from finmath-lib, © Christian P. Fries. It is distributed under the Apache License, Version 2.0. The licence text and finmath-lib's NOTICE are in [`licenses/finmath-lib/`](licenses/finmath-lib/), and the file's header and Javadoc describe the changes.

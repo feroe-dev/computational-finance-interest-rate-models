@@ -1,3 +1,15 @@
+/*
+ * (c) Copyright Christian P. Fries, Germany. Contact: email@christian-fries.de.
+ *
+ * Created on 09.02.2004
+ *
+ * Modified in 2026 by Felipe, GM-1 and GM-2: the measure and the state-space transform
+ * are injected as plug-ins (see the class Javadoc for the list of changes).
+ *
+ * Based on net.finmath.montecarlo.interestrate.models.LIBORMarketModelFromCovarianceModel
+ * from finmath-lib, licensed under the Apache License, Version 2.0.
+ * See licenses/finmath-lib/LICENSE.txt and licenses/finmath-lib/NOTICE.txt.
+ */
 package net.finmath.lecture.computationalfinance.project;
 
 import java.util.HashMap;
