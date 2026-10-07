@@ -1,105 +1,55 @@
-# computational-finance-termstructuremodelplugins-project
+# Interest Rate Models: LIBOR Market Model Plug-ins
 
-**Extend and Analyse a Term Structure Model**
+A Monte Carlo LIBOR Market Model in Java, built on [finmath-lib](https://github.com/finmath/finmath-lib). Two design decisions that are normally hard-coded, the **probability measure** and the **state-space transform**, are refactored into plug-in interfaces. New measures and new rate dynamics can then be added without changing the model class (the open/closed principle).
 
-The project consists of the improvements of a Monte-Carlo simulation of an Euler-scheme discretization of a *Discrete Term Structure Model* (LIBOR Market Model) and the investigation of properties of the  model.
+Group project for **Computational Finance and its Object Oriented Implementation** at **LMU Munich** (Prof. Christian Fries), winter term 2025/26.
 
+## What's implemented
 
-## Project description
+| Task | Topic | Classes |
+| --- | --- | --- |
+| Ex 1 + 2 | **T_k-forward measure** and a `Measure` plug-in interface that replaces the hard-coded SPOT/TERMINAL enum | `Measure`, `SpotMeasure`, `TerminalMeasure`, `ForwardMeasure` |
+| Ex 3 | **Real-world measure P**: a zero-drift (martingale) measure and a "riding the yield curve" measure | `ZeroDriftMeasure`, `RidingTheCurveMeasure` |
+| Ex 5 | **Displaced lognormal model** with a per-rate displacement a_j, which allows negative rates down to −a_j | `DisplacedLogNormalStateSpaceTransform` |
+| Ex 6 | **State-space transform plug-in** that replaces the hard-coded NORMAL/LOGNORMAL enum | `StateSpaceTransform`, `NormalStateSpaceTransform`, `LogNormalStateSpaceTransform` |
 
-The current version of the project description can be found in the lecture's Moodle's announcements section.
+The model class `AugmentedLIBORMarketModel` is derived from finmath-lib's `LIBORMarketModelFromCovarianceModel`. A `Measure` and a `StateSpaceTransform` are injected into it at construction time.
 
+### Design notes
 
-## Importing as Maven project
+- **Measure:** a measure determines the drift of each forward rate and the numeraire. Spot, terminal and T_k-forward measures differ only in the summation range and sign of the drift term, so the drift logic belongs to the measure.
+- **State-space transform:** in addition to the forward and inverse transform L = f(X), the transform supplies the Itô correction and the drift weight factor g(L). Keeping all three in one object (the Strategy pattern) means an incompatible combination, such as a lognormal transform without its Itô correction, cannot be configured.
+- **Per-rate parameters:** every transform method receives the LIBOR index, so a transform can use a different parameter for each rate. The displaced model uses this for its per-rate displacement.
 
-The project comes with a pre-configured Maven pom.xml file referencing finmath-lib.
+## Tests
 
-- Clone the project using git (`git clone`), then import the project in your favourite IDE as Maven project.
+[`LIBORMarketModelPluginTest`](src/test/java/net/finmath/lecture/computationalfinance/project/LIBORMarketModelPluginTest.java) contains one test per task. Each test prices in-the-money, at-the-money and out-of-the-money caplets by Monte Carlo and compares them with analytic values.
 
+- **`ex1and2_forwardMeasure`:** caplets under T_k-forward measures (k = 6, 10, 14, 18), with normal and lognormal dynamics.
+- **`ex3_realWorldMeasure`:** checks E[L_j(T_k)] = L_j(0) under zero drift, and E[L_j(T_k)] ≈ L_{j−k}(0) under riding the curve.
+- **`ex5_displacedLognormal`:** displaced lognormal caplets under the spot and terminal measures, compared with the Black formula for the shifted rate.
+- **`ex6_stateSpaceTransform`:** checks that the plug-in version matches the original enum-based implementation bit for bit (same seed, zero error), and compares normal and lognormal prices.
 
-## Notes
+## Build and run
 
-### Unit Tests
+Requires Java 17 and Maven.
 
-You may consider adding unit tests to your solution. You find a small stub / sample test in `src/main/test`. You can run unit test from Eclipse or via Maven on the command line
-
-```
-mvn clean test
-```
-
-(run from the project directory).
-
-
-### Code Style
-
-If you like to improve your code-style, you may run ``checkstyle`` via the maven command
-
-```
-mvn checkstyle:check 
-```
-
-(run from the project directory).
-
-Checkstyle will report style issues of your code. If you like to clean up the formatting, you may use *Source -> Clean up...* in Eclipse.
-
-
-### JavaDoc
-
-To generate JavaDoc run
-
-```
-mvn javadoc:javadoc 
+```bash
+mvn clean test            # run the unit tests
+mvn javadoc:javadoc       # API docs (LaTeX math in Javadoc) -> target/site/apidocs
+mvn checkstyle:check      # finmath code style
 ```
 
-(if successful, the javadoc will then reside in `target/site/apidocs`). The project is configured to support
-LaTeX in JavaDocs (use `\(` and `\)` to open and close a math environment).
+## Team
 
-Note that JavaDoc is HTML. This implies that an `<` needs to be written as `&lt;` and `>` needs to be written as `>`.
+Developed in a team of three (GM = group member):
 
-### CI/CD
+- [Felipe](https://github.com/feroe-dev): measure plug-in interface and the spot, terminal and forward measures (Ex 1 + 2), the real-world measures (Ex 3), and Javadoc
+- GM-1: forward-measure case distinctions, the displaced lognormal model (Ex 5), drift caching, and tests
+- GM-2: state-space transform plug-in (Ex 6) and comparison tests
 
-The project is configured to run Unit Test, JavaDoc, and Checkstyle upon a git push (via GitHub Actions).
+The commit history shows each person's individual contributions.
 
-## Importing in Eclipse from GitHub
+## Acknowledgements
 
-Import this git repository into Eclipse and start working.
-
-- Click on the link to your repository (the link starts with qntlb/computational-finance… )
-- Click on “Clone or download” and copy the URL to your clipboard.
-- Go to Eclipse and select File -> Import -> Git -> Projects from Git **(with smart import)**.
-- Select “Clone URI” and paste the GitHub URL from step 2.
-- Select "main", then Next -> Next -> Finish.
-
-Note: If you choose "Projects from Git" without the option "(with smart import)" you may experience that
-the project is not imported into Eclipse, but it was successfully checked out via git, i.e. you
-find the project files in your local git folder. In that case, you can import the project "as maven project"
-(see below).
-
-### Importing in Eclipse (as Maven Project)
-
-If you checked out the git repository manually (`git clone`), then import
-the local git folder as Maven Project;
-
-- File -> Import -> Maven -> Existing Maven Projects
-- Select the project folder in your *local* git folder.
-
----
-
-<script type="text/javascript"
-  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_CHTML">
-</script>
-<script type="text/x-mathjax-config">
-  MathJax.Hub.Config({
-    tex2jax: {
-      inlineMath: [['$','$'], ['\\(','\\)']],
-      processEscapes: true},
-      jax: ["input/TeX","input/MathML","input/AsciiMath","output/CommonHTML"],
-      extensions: ["tex2jax.js","mml2jax.js","asciimath2jax.js","MathMenu.js","MathZoom.js","AssistiveMML.js", "[Contrib]/a11y/accessibility-menu.js"],
-      TeX: {
-      extensions: ["AMSmath.js","AMSsymbols.js","noErrors.js","noUndefined.js"],
-      equationNumbers: {
-      autoNumber: "AMS"
-      }
-    }
-  });
-</script>
+The project template, `LectureProjectData` and the build configuration were provided by the lecture (Christian Fries, quantLab). The model is based on [finmath-lib](https://github.com/finmath/finmath-lib) (Apache License 2.0).
